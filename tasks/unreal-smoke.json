@@ -1,0 +1,15 @@
+{
+  "id": "unreal-smoke",
+  "goal": "Run native Unreal state tests and packaged runtime-outcome smoke after an authorized engine setup and package build.",
+  "inputs": ["docs/UNREAL.md"],
+  "allowed_writes": [],
+  "acceptance": [
+    "All three named native automation state tests pass without skips.",
+    "Packaged runtime reports loaded authored material, prerequisite rejection, door collision changes, and reference outcome.",
+    "This does not grant physical-input, visual, performance, or human acceptance."
+  ],
+  "limits": {"deadline_seconds": 1500, "command_timeout_seconds": 700, "max_attempts": 1, "budget_usd": "0.00"},
+  "resource": "integrator",
+  "steps": [{"name": "Native Unreal automation", "argv": ["{python}", "studio.py", "unreal", "test", "--execute"]}],
+  "verification": [{"name": "Packaged runtime outcomes", "argv": ["{python}", "studio.py", "unreal", "smoke", "--execute"]}]
+}

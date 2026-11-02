@@ -1,0 +1,13 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.8",
+  "Category": "Novanode",
+  "Description": "Linux-first interactive studio lab. Prepared source; native Unreal verification pending.",
+  "Modules": [
+    {"Name": "NovanodeLab", "Type": "Runtime", "LoadingPhase": "Default"}
+  ],
+  "Plugins": [
+    {"Name": "PythonScriptPlugin", "Enabled": true, "TargetAllowList": ["Editor"]},
+    {"Name": "EditorScriptingUtilities", "Enabled": true, "TargetAllowList": ["Editor"]}
+  ]
+}

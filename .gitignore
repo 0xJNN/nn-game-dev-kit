@@ -1,0 +1,22 @@
+.studio/
+.venv/
+__pycache__/
+.ruff_cache/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+!.env.example
+artifacts/
+projects/lab/.godot/
+projects/lab/assets/generated/*
+!projects/lab/assets/generated/.gitkeep
+*.blend1
+*.blend2
+# Unreal: keep source/config; reproduce editor assets and build outputs.
+**/Binaries/
+**/Intermediate/
+**/Saved/
+**/DerivedDataCache/
+.vs/
+projects/NovanodeLab/Content/Generated/

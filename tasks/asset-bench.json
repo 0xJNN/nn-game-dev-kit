@@ -1,0 +1,25 @@
+{
+  "id": "asset-bench",
+  "goal": "Build and validate the procedural lab bench without opening interactive Blender.",
+  "inputs": ["docs/ASSETS.md"],
+  "allowed_writes": ["projects/lab/assets/generated"],
+  "acceptance": [
+    "A self-contained GLB and provenance manifest are produced.",
+    "Actual geometry stays within the triangle, size, and world-space pivot budgets."
+  ],
+  "limits": {
+    "deadline_seconds": 240,
+    "command_timeout_seconds": 180,
+    "max_attempts": 1,
+    "budget_usd": "0.00"
+  },
+  "steps": [
+    {"name": "Build bench in background Blender", "argv": ["{python}", "studio.py", "assets", "build"]}
+  ],
+  "verification": [
+    {
+      "name": "Re-read exported geometry and provenance",
+      "argv": ["{python}", "studio.py", "assets", "validate", "projects/lab/assets/generated/bench.manifest.json"]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "godot": {
+    "version": "4.7.2",
+    "linux-x86_64": {
+      "url": "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip",
+      "sha256": "cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4",
+      "executable": "Godot_v4.7.2-stable_linux.x86_64"
+    },
+    "darwin": {
+      "url": "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_macos.universal.zip",
+      "sha256": "c58a24e31d720be9d62f60cb5627c4e695fb72f21b0cfe1bc9ccaa9a3b3ba63e",
+      "executable": "Godot.app/Contents/MacOS/Godot"
+    },
+    "templates": {
+      "url": "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz",
+      "sha256": "f298490b8d44d934be425a5a65a51bf15f422428b229a06a6e11d9ffea248011"
+    }
+  },
+  "blender": {
+    "version": "4.5.15",
+    "linux-x86_64": {
+      "url": "https://download.blender.org/release/Blender4.5/blender-4.5.15-linux-x64.tar.xz",
+      "sha256": "0d2b8bb2efe97e6c8eb57de6b7322f8800e1984e3125b60decca5f6771e4773e",
+      "executable": "blender-4.5.15-linux-x64/blender"
+    },
+    "darwin-arm64": {
+      "url": "https://download.blender.org/release/Blender4.5/blender-4.5.15-macos-arm64.dmg",
+      "sha256": "bfbc0bda099d1ab7aef0992a584f872f58bed9bb491210ad45f9ca071aa2e688"
+    },
+    "darwin-x86_64": {
+      "url": "https://download.blender.org/release/Blender4.5/blender-4.5.15-macos-x64.dmg",
+      "sha256": "3801a97619292a012ede0e855ee705ae872a680474845297b777254f7f21ed78"
+    }
+  }
+}

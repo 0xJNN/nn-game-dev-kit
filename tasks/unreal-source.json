@@ -1,0 +1,14 @@
+{
+  "id": "unreal-source",
+  "goal": "Check Unreal project source contracts and portable state logic without pretending to run the engine.",
+  "inputs": ["docs/UNREAL.md", "docs/BRIEF.md"],
+  "allowed_writes": [],
+  "acceptance": [
+    "The descriptor, required source, and engine association are consistent.",
+    "Python regressions and the portable C++ state test pass.",
+    "Native Unreal build, visual quality, and model coding quality remain explicitly unverified."
+  ],
+  "limits": {"deadline_seconds": 180, "command_timeout_seconds": 120, "max_attempts": 1, "budget_usd": "0.00"},
+  "steps": [{"name": "Validate source contract", "argv": ["{python}", "studio.py", "unreal", "validate"]}],
+  "verification": [{"name": "Python and portable C++ regressions", "argv": ["{python}", "studio.py", "test"]}]
+}

@@ -1,0 +1,7 @@
+---
+description: Project-wide production boundaries and verification requirements
+alwaysApply: true
+---
+
+Follow `AGENTS.md`. Use a bounded task contract, keep evidence, and leave human approval pending.
+Example: `python3 studio.py task run tasks/lab-smoke.json` previews work without executing it.

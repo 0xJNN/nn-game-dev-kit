@@ -1,0 +1,76 @@
+{
+  "checked_at": "2026-11-02",
+  "status": "metadata_verified_not_locally_benchmarked",
+  "cloud": {
+    "coding": "cohere/north-mini-code:free",
+    "coding_alternative": "recursive/flint-v1.0:free",
+    "visual_review": "nvidia/nemotron-3.5-super-vl:free"
+  },
+  "local": {
+    "qwen38-main": {
+      "name": "Qwen3.8-27B UD-Q4_K_M",
+      "repository": "unsloth/Qwen3.8-27B-GGUF",
+      "revision": "4ca720788d1e01f1bff70c033e0d0028fd02e502",
+      "file": "Qwen3.8-27B-UD-Q4_K_M.gguf",
+      "bytes": 16464440224,
+      "sha256": "322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "license": "apache-2.0",
+      "alias": "novanode-qwen38",
+      "context": 16384,
+      "output": 4096,
+      "role": "First local quality candidate; Unreal closed. Text-only server profile."
+    },
+    "qwen35-small": {
+      "name": "Qwen3.5-9B Q4_K_M",
+      "repository": "unsloth/Qwen3.5-9B-GGUF",
+      "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+      "file": "Qwen3.5-9B-Q4_K_M.gguf",
+      "bytes": 5680522464,
+      "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+      "license": "apache-2.0",
+      "alias": "novanode-qwen35-small",
+      "context": 16384,
+      "output": 4096,
+      "role": "Small-task candidate while Unreal is open; verify actual VRAM and tool calls."
+    },
+    "north-code": {
+      "name": "North Mini Code 1.0 UD-Q4_K_M",
+      "repository": "unsloth/North-Mini-Code-1.0-GGUF",
+      "revision": "e306bb4bf0df610f5471d97a01de2b6e0b24d356",
+      "file": "North-Mini-Code-1.0-UD-Q4_K_M.gguf",
+      "bytes": 19203186784,
+      "sha256": "d59f4cb3abec1bd3e5e185b99cdd811e3be3402cbc2bab8223081a460d5724bf",
+      "license": "apache-2.0",
+      "alias": "novanode-north-code",
+      "context": 16384,
+      "output": 4096,
+      "role": "Experimental coding specialist; tight VRAM and runtime/chat-template support gate."
+    },
+    "nanbeige-experiment": {
+      "name": "Nanbeige4.3-33B Q3_K_M",
+      "repository": "bartowski/Nanbeige_Nanbeige4.3-33B-GGUF",
+      "revision": "9beb68421fdf7be095093a6888325fa2c83ddd38",
+      "file": "Nanbeige_Nanbeige4.3-33B-Q3_K_M.gguf",
+      "bytes": 15919746176,
+      "sha256": "671a48692387750eaa94f113f2635386d9d1c309b2d16c77b2890876d0e04e51",
+      "license": "apache-2.0",
+      "alias": "novanode-nanbeige",
+      "context": 16384,
+      "output": 4096,
+      "role": "Recent coding-agent challenger; experimental Q3 quality and dense-model speed tradeoff, Unreal closed."
+    },
+    "qwen3-coder": {
+      "name": "Qwen3-Coder-30B-A3B Instruct Q4_K_M",
+      "repository": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+      "revision": "b17cb02dd882d5b6ab62fc777ad2995f19668350",
+      "file": "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+      "bytes": 18556689568,
+      "sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
+      "license": "apache-2.0",
+      "alias": "novanode-qwen3-coder",
+      "context": 16384,
+      "output": 4096,
+      "role": "Older coding-specialist baseline; compare against newer candidates, not assumed best."
+    }
+  }
+}

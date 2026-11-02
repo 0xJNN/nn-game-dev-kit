@@ -1,0 +1,30 @@
+{
+  "id": "lab-smoke",
+  "goal": "Verify the representative lab journey without changing authored source files.",
+  "inputs": ["docs/BRIEF.md"],
+  "allowed_writes": ["projects/lab/assets/generated/bench.glb.import"],
+  "acceptance": [
+    "Closed/open door collision changes in world space through interaction input.",
+    "Power and experiment prerequisites, movement, and save/load pass.",
+    "All 14 named checks pass; human visual acceptance remains pending."
+  ],
+  "limits": {
+    "deadline_seconds": 240,
+    "command_timeout_seconds": 180,
+    "max_attempts": 1,
+    "budget_usd": "0.00"
+  },
+  "resource": "integrator",
+  "steps": [
+    {
+      "name": "Run headless gold path",
+      "argv": ["{python}", "studio.py", "godot", "test", "--output", "{evidence}/gold-path.json"]
+    }
+  ],
+  "verification": [
+    {
+      "name": "Independently check evidence structure and verdicts",
+      "argv": ["{python}", "scripts/verify_evidence.py", "{evidence}/gold-path.json", "--min-checks", "14"]
+    }
+  ]
+}

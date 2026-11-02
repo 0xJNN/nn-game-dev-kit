@@ -1,0 +1,27 @@
+[studio]
+name = "Novanode Studio"
+engine = "unreal"
+platform = "linux"
+project = "projects/NovanodeLab/NovanodeLab.uproject"
+legacy_godot_project = "projects/lab"
+
+[unreal]
+# Match the installed editor's major/minor; no engine download or EULA acceptance is automated.
+version = "5.8"
+build_timeout_seconds = 1800
+test_timeout_seconds = 600
+
+[budgets]
+# Reservations + settled costs count toward this local project's lifetime budget.
+# No paid adapter is enabled. Changing this file is a human approval decision.
+total_usd = "25.00"
+per_task_usd = "5.00"
+
+[context]
+max_characters = 20000
+
+[assets]
+max_triangles = 20000
+max_file_bytes = 16777216
+max_dimension_m = 10.0
+allowed_licenses = ["CC0-1.0", "CC-BY-4.0", "LicenseRef-Novanode-Internal"]
