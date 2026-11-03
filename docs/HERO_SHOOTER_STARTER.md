@@ -1,7 +1,34 @@
-# Paladins-inspired starter — recommendation, not an installed game
+# Paladins-inspired starter — Lyra downloaded; Linux build blocked
 
 Checked 2026-11-03. Keep the existing NovanodeLab intact; it is not a multiplayer shooter framework.
-The installed UE 5.8.4 editor is available, but no hero-shooter sample was downloaded or launched.
+Official Lyra **5.8** is downloaded; its native Linux build failed and the sample has not launched.
+
+## Current verification and diagnosis
+
+- Original: `/home/d/EpicVault/Lyra_5.8/data/Lyra.uproject`. Separate working copy:
+  `.studio/lyra/projects/LyraStarterGame/Lyra.uproject`. Source, content, plugins, and config are
+  present; the download is approximately **4.9 GiB**. Windows binaries are not Linux binaries.
+- The project targets **5.8**; the installed engine is **5.8.4**. Its bundled **Clang 20.1.8 / v26**
+  matches [Epic's UE 5.8 Linux toolchain requirements](https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-8-release-notes).
+- One native build failed with exit code **6**. All six compiler errors are unreachable-code
+  warnings promoted to errors in the **CommonUser** plugin: four redundant `break` statements
+  following returns in `CommonUserBasicPresence.cpp`, and two loop-related diagnostics in
+  `CommonSessionSubsystem.cpp`. The loop cases require intended-behavior review; do not assume
+  they are harmless or change iteration semantics merely to compile.
+- All **818** baseline source/config/descriptor hashes remain unchanged in both copies. No
+  compiler checks were relaxed. Neither the project nor CommonUser's descriptor explicitly
+  excludes Linux, but that is not a successful Linux build or a support guarantee.
+- This identifies a localized build blocker, not six demonstrated gameplay bugs or a general
+  game-quality verdict. Runtime gameplay, networking, rendering, packaging, and performance
+  remain untested. The repository's **77** regressions are separate from Lyra coverage.
+
+Evidence: `.studio/runs/lyra-native-bootstrap-efc5fa3a5f57/`,
+`.studio/evidence/lyra-linux-diagnosis-metadata-2026-11-03.json`, and
+`.studio/evidence/lyra-control-flow-metadata-2026-11-03.json`. Only version/platform metadata,
+hashes, compiler-warning categories, and functional statement categories were returned to model
+context; raw sample source/assets were not. No authoritative public fix for this exact build
+was established. Next: license-safe review and a targeted CommonUser source repair in the working
+copy, then a bounded rebuild and startup check—not a redownload or blanket warning suppression.
 
 ## Recommended foundation: Epic Lyra Starter Game
 
@@ -21,16 +48,20 @@ art and audio; genre inspiration does not authorize copying Paladins intellectua
 ## Acquisition and license gate
 
 1. Sign in to Epic/Fab personally and review the actual offered license. Do not send credentials
-   in chat. The official listing was opened in the owner's browser; entitlement is not confirmed.
+   in chat. The owner completed authentication and sample acquisition privately in Epic Asset
+   Manager; account secrets and acceptance records were not inspected.
 2. Select an official Lyra artifact compatible with UE **5.8**. Confirm its actual version, size,
-   destination and terms before downloading; do not use an arbitrary public mirror.
+   destination and terms before downloading; do not use an arbitrary public mirror. The local
+   sample's 5.8 association and source/content presence are now verified as recorded above.
 3. Keep it as a separate project and prove the unchanged sample first. Prefer new game-feature
    plugins/experiences over rewriting Lyra core or merging it into NovanodeLab.
 4. Review AI-use rights before giving any sample content to AI tools. The Fab listing currently
    displays **“Allows usage with AI: No”**; Epic's [content agreement](https://www.unrealengine.com/eula/content)
    restricts NoAI content as generative-AI inputs. Clarify the applicable artifact/license rather
-   than assuming that “free” means unrestricted AI use or redistribution. No such content was
-   downloaded or provided to a model during this research.
+   than assuming that “free” means unrestricted AI use or redistribution. The initial research
+   preceded acquisition; the later local compile used the downloaded files without returning
+   source/assets to a model. The applicable code-versus-content license boundary still needs
+   clarification before a source-level AI review. Do not substitute a public mirror to evade it.
 
 [Epic's source announcement](https://forums.unrealengine.com/t/lyra-starter-game-source-code-now-on-github/767395)
 locates Lyra code inside `EpicGames/UnrealEngine/Samples/Games/Lyra`; viewing that official source
