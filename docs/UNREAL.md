@@ -2,10 +2,36 @@
 
 ## Preparation status
 
-The user chose **project preparation first**, with engine installation deferred. The source
-targets UE **5.8** based on current Epic documentation; no installed editor or native build has
-validated that target yet. Do not label source validation as an engine compile/render pass.
-Linux is the active target. No macOS work is required for this phase.
+**2026-11-03:** an existing **UE 5.8.4** installation was found at
+`/run/media/d/SEARCHX_WORK/Unreal/engines/5.8.4`. Its bundled v26/Clang **20.1.8** toolchain built
+the actual lab editor module. Owned map/material preparation and all three native state tests
+passed; all **77** Python/portable C++ regressions passed. The graphical editor initialized on the
+RTX 3090, and the owner confirmed its window is visible. This is not gameplay, art/performance,
+packaged startup, or broad human acceptance. Linux remains primary; macOS remains deferred.
+
+Machine-local helpers created for this installation:
+
+```sh
+source .studio/unreal.env
+python3 .studio/launch_unreal.py
+```
+
+Do not launch another instance if the editor is already open. Press **Play** to construct the lab
+at runtime. Close the editor normally before exclusive build/preparation/native-test/package work.
+For a fresh checkout without these ignored helpers, set `UE_ROOT` explicitly to the path above.
+
+Evidence: `.studio/runs/unreal-rect-light-compat-395edc980ade/` records the successful native build
+and asset generation; `.studio/runs/unreal-json-bom-compat-2b8c20b30fb8/` records fresh accepted
+native tests and regressions; `.studio/runs/unreal-graphical-preflight-900537e94114/` records final
+regressions/source/whitespace checks. Earlier audit stops are preserved in their run journals.
+Editor visibility was confirmed by the owner; no screenshot review or physical-input pass is claimed.
+
+Native integration required the documented rect-light component API and UTF-8-BOM-compatible JSON
+decoding. With owner approval, the irrelevant AndroidFileServer plugin was disabled and its
+auto-generated source settings removed. A regression checks that policy. Unreal also normalized
+`DefaultInput.ini`; all six authored axes, both actions/modifiers, and explicit mouse flags were
+checked unchanged. Audits stopped unexpected writes before these scoped fixes; checks were not
+disabled. Keep generated asset write allowances explicit in future preparation contracts.
 
 ## Installation boundary
 
@@ -13,7 +39,9 @@ Get the Linux editor through [Epic's official Linux page](https://www.unrealengi
 using your own account and current license terms. This repository neither downloads Epic's
 engine nor accepts its EULA. Review game vs non-game/visualization licensing before commercial use.
 Plan space for the editor, derived data, shader caches, intermediate builds, and packaged output.
-Approximately 75 GiB was free during research; no old models/tools were deleted to make space.
+The 2026-11-03 check found about 75 GiB free on the project drive and 409 GiB on SEARCHX_WORK.
+These are observations, not a reservation or guarantee for another installation. No old
+models/tools were deleted, existing services stopped, or licenses accepted during this setup.
 
 Set the **installation root**, not the executable path:
 
@@ -33,6 +61,8 @@ Read-only review on 2026-11-02 found Fedora 44 with host Clang 22.1.8, 73.43 GiB
 project filesystem, and no `UE_ROOT` configured. UE 5.8 release notes specify Clang 20.1.8 and
 reference Ubuntu/Rocky/RHEL configurations. This is a toolchain compatibility gate, not an instruction
 to replace the host compiler, install Ubuntu, or assume native Fedora verification has passed.
+The subsequent 2026-11-03 build used the installed engine's bundled Clang successfully; host Clang
+was left unchanged. That scopes evidence to this project/build, not blanket distro certification.
 
 ## Preview, build, prepare, play
 
@@ -63,7 +93,10 @@ Hardware ray tracing is off for initial iteration. Measure and tune these on the
 they are not a performance guarantee. Avoid loading a large local model while compiling shaders
 or using the editor's GPU rendering pipeline.
 
-## Native gates — not yet run here
+## Native gates — state tests passed; packaging and runtime smoke pending
+
+The three native state tests passed on 2026-11-03. Close the running editor before repeating these
+commands. Linux packaging and packaged runtime smoke have not yet been run on this installation.
 
 ```sh
 python3 studio.py unreal test --execute
@@ -82,11 +115,11 @@ python3 studio.py unreal smoke --execute
 The portable test compiles the exact engine-independent `LabState.h` with the host C++ compiler.
 It proves state/formula behavior only, not the Unreal actors, module, UHT, shaders, or packaging.
 
-Review findings H5/H6 in [AI_CODING_RESEARCH.md](AI_CODING_RESEARCH.md) remain open: the native
-wrapper currently uses generic “failed” text for timeouts too, and package acceptance only checks
-launcher existence rather than a build-identity manifest. Inspect process/log state after timeout,
-reconcile before retrying, and record the source/engine/artifact identity for each native result.
-These are documented qualification/hardening gates, not fixes silently applied in this review.
+Review findings H5/H6 in [AI_CODING_RESEARCH.md](AI_CODING_RESEARCH.md) are only partly addressed:
+the wrapper now reports interrupted commands as unknown, with reconciliation guidance. Durable
+reconciliation and package/source build-identity provenance remain open; package acceptance still
+only checks launcher existence. Inspect owned process/log state before retrying and retain exact
+source/engine/artifact identity. Generator recipe migration/reuse concerns in H6 remain open too.
 
 ## CI and evidence
 

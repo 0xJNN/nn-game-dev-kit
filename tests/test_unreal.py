@@ -4,7 +4,7 @@ import subprocess
 from unittest.mock import patch
 
 from helpers import ProjectTest
-from pipeline.common import ROOT, StudioError, atomic_json
+from pipeline.common import ROOT, StudioError, atomic_json, load_json
 from pipeline.unreal import commands, doctor, engine_root, run, validate_source, verify_automation, verify_smoke
 
 
@@ -18,6 +18,18 @@ class UnrealTests(ProjectTest):
         result = validate_source(self.root)
         self.assertEqual(result["status"], "source_validated")
         self.assertFalse(result["native_build_verified"])
+
+    def test_linux_project_disables_mobile_file_server(self):
+        project = self.root / "projects/NovanodeLab"
+        descriptor = load_json(project / "NovanodeLab.uproject")
+        plugins = [plugin for plugin in descriptor.get("Plugins", [])
+                   if plugin.get("Name") == "AndroidFileServer"]
+        self.assertEqual(len(plugins), 1)
+        self.assertIs(plugins[0].get("Enabled"), False)
+        section = "[/Script/AndroidFileServerEditor.AndroidFileServerRuntimeSettings]"
+        with (project / "Config/DefaultEngine.ini").open() as settings:
+            has_server_settings = any(line.strip() == section for line in settings)
+        self.assertFalse(has_server_settings, "Mobile file-server settings must not be generated for Linux")
 
     def test_missing_engine_is_actionable_not_an_auto_download(self):
         with patch.dict(os.environ, {"UE_ROOT": ""}):

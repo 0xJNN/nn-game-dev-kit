@@ -167,7 +167,8 @@ void AStudioGameMode::BuildRoom()
         {
             Box(FVector(X, Y, 365), FVector(220, 50, 5), Palette::White, 3.f, false);
             auto* Light = GetWorld()->SpawnActor<ARectLight>(FVector(X, Y, 350), FRotator(-90, 0, 0));
-            auto* Component = Light->GetRectLightComponent();
+            auto* Component = Light ? Cast<URectLightComponent>(Light->GetLightComponent()) : nullptr;
+            if (!Component) { continue; }
             Component->SetMobility(EComponentMobility::Movable);
             Component->SetIntensity(2200.f);
             Component->SetSourceWidth(200.f);

@@ -22,7 +22,8 @@ def utc_now() -> str:
 
 def load_json(path: Path):
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        # Unreal automation exports a UTF-8 BOM; ordinary UTF-8 remains valid too.
+        return json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError) as exc:
         raise StudioError(f"Cannot read JSON {path}: {exc}") from exc
 

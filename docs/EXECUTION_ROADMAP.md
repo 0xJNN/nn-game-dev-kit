@@ -1,10 +1,16 @@
 # Novanode Studio — progress, execution roadmap, and backlog
 
-Snapshot: **2026-11-02** · Primary target: **Unreal / Linux** · Prepared engine family: **5.8**
+Current checkpoint: **2026-11-03** · Primary target: **Unreal / Linux** · Installed engine: **5.8.4**
 
-**Current position:** source preparation is implemented; native Unreal execution and model-profile
-qualification have not begun. The review identified additional activation/hardening gates below.
-**Next action:** step **01**, a read-only storage/GPU/toolchain readiness check.
+**Current position:** an existing engine was discovered and the lab editor is open, with window
+visibility confirmed by the owner. Real module compilation, owned asset preparation, three native
+state tests, and 77 Python/portable C++ tests passed. Model-profile qualification has not begun.
+**Next action:** finish step **07**'s real-input gold path with the owner, then continue the applicable
+native/package gates. Do not treat editor visibility or the state-test pass as gameplay/art approval.
+The earlier step descriptions and historical preparation observations below are preserved; approval
+checkboxes have not been retroactively granted. Current evidence and local launch commands are in
+[UNREAL.md](UNREAL.md). A separate hero-shooter foundation is proposed in
+[HERO_SHOOTER_STARTER.md](HERO_SHOOTER_STARTER.md); Lyra has not been acquired or launched.
 **First milestone:** a playable Linux lab with native test evidence and an inspected visual baseline.
 
 Review update, **2026-11-02**: command behavior, task prerequisites, public model availability,

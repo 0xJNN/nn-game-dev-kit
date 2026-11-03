@@ -6,10 +6,15 @@ macOS is deferred. The Godot pilot is preserved as a legacy reference, not the p
 
 ## Current status
 
-**Prepared source, not a running Unreal build yet.** No licensed Unreal editor is installed here.
-Python tools and portable C++ state logic can be tested now; engine compilation, rendering,
-packaged startup, and actual model coding quality still need their respective runtime gates.
-No Epic license was accepted, no engine/model weights downloaded, and no credentials changed.
+**2026-11-03: Unreal 5.8.4 is installed and the lab editor has been launched.** The owner confirmed
+the window is visible. Actual native compilation, owned map/material preparation, all three native
+state tests, and 77 Python/portable C++ tests passed. Real gameplay input, visual/performance quality,
+packaged startup, and model coding quality remain separate unverified gates. This setup reused an
+existing installation; it did not download an engine/model or accept Epic's license.
+
+For a Paladins-inspired hero shooter, see the [starter recommendation](docs/HERO_SHOOTER_STARTER.md):
+use a separate official Lyra project rather than turning the lab into a shooter. Lyra acquisition,
+version compatibility, and license review are still pending; the sample is not installed yet.
 
 ## Start here
 
@@ -17,6 +22,11 @@ For completed progress, numbered execution steps, approval gates, and the ordere
 the [execution roadmap](docs/EXECUTION_ROADMAP.md). Resume at its first unfinished required step.
 
 Requires Python **3.11.8+**. A C++ compiler is needed for the portable state test.
+
+On this workstation, `.studio/unreal.env` selects the discovered engine and
+`python3 .studio/launch_unreal.py` opens the lab editor. It is already open at this checkpoint;
+do not start another instance. These helpers are ignored, machine-local files. See
+[the exact installation and verification evidence](docs/UNREAL.md) for a fresh checkout.
 
 ```sh
 python3 studio.py doctor
@@ -27,6 +37,7 @@ python3 studio.py unreal build
 Unreal actions **preview by default**. Install the Linux editor through your authorized Epic
 account, review licensing/storage needs, and point `UE_ROOT` at the folder containing `Engine/`.
 The prepared project targets the **5.8 version family**; another version needs an explicit review.
+Close the editor normally before exclusive build, prepare, native-test, package, or smoke operations.
 
 ```sh
 export UE_ROOT=/your/installed/UE_5.8
@@ -98,5 +109,5 @@ approval remain human gates.
 · [Verification record](docs/VERIFICATION.md) · [Legacy pilot](docs/LEGACY_GODOT.md)
 
 The runner audits source writes after commands; it is **not an OS/network sandbox**. The ledger
-tracks recorded jobs, not arbitrary OpenCode requests. No redistribution license, remote,
-publication credentials, developer signing, or automatic acceptance is configured.
+tracks recorded jobs, not arbitrary OpenCode requests. No redistribution license, developer signing,
+or automatic release acceptance is configured. Pushes and release publication require approval.

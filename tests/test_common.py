@@ -34,6 +34,22 @@ class CommonTests(ProjectTest):
         self.assertEqual(load_json(path), {"status": "second"})
         self.assertEqual(list(self.root.glob(".pending-*")), [])
 
+    def test_load_json_accepts_utf8_with_and_without_bom(self):
+        path = self.root / "report.json"
+        for encoding in ("utf-8", "utf-8-sig"):
+            with self.subTest(encoding=encoding):
+                path.write_text('{"status": "Success", "note": "caf\u00e9"}', encoding=encoding)
+                self.assertEqual(load_json(path), {"status": "Success", "note": "caf\u00e9"})
+
+    def test_load_json_rejects_malformed_or_invalid_utf8(self):
+        path = self.root / "report.json"
+        for content in (b'{"incomplete":', b'\xef\xbb\xbf{"incomplete":', b'\xff',
+                        b'\xff\xfe{\x00}\x00', b'\xef\xbb\xbf\xef\xbb\xbf{}'):
+            with self.subTest(content=content):
+                path.write_bytes(content)
+                with self.assertRaises(StudioError):
+                    load_json(path)
+
     def test_atomic_json_rejects_nonfinite_values_without_overwriting(self):
         path = self.root / "state.json"
         atomic_json(path, {"valid": True})
