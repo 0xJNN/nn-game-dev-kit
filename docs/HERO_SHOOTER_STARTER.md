@@ -1,7 +1,9 @@
-# Paladins-inspired starter — Lyra downloaded; Linux build blocked
+# Paladins-inspired starter — Lyra Linux build and editor startup verified
 
 Checked 2026-11-03. Keep the existing NovanodeLab intact; it is not a multiplayer shooter framework.
-Official Lyra **5.8** is downloaded; its native Linux build failed and the sample has not launched.
+Official Lyra **5.8** now builds on Linux with the existing **Unreal 5.8.4** and passes a full
+offline headless editor startup/normal-exit check. Graphical visibility and gameplay are separate
+checks; neither is established by headless startup.
 
 ## Current verification and diagnosis
 
@@ -10,25 +12,52 @@ Official Lyra **5.8** is downloaded; its native Linux build failed and the sampl
   present; the download is approximately **4.9 GiB**. Windows binaries are not Linux binaries.
 - The project targets **5.8**; the installed engine is **5.8.4**. Its bundled **Clang 20.1.8 / v26**
   matches [Epic's UE 5.8 Linux toolchain requirements](https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-8-release-notes).
-- One native build failed with exit code **6**. All six compiler errors are unreachable-code
-  warnings promoted to errors in the **CommonUser** plugin: four redundant `break` statements
-  following returns in `CommonUserBasicPresence.cpp`, and two loop-related diagnostics in
-  `CommonSessionSubsystem.cpp`. The loop cases require intended-behavior review; do not assume
-  they are harmless or change iteration semantics merely to compile.
-- All **818** baseline source/config/descriptor hashes remain unchanged in both copies. No
-  compiler checks were relaxed. Neither the project nor CommonUser's descriptor explicitly
-  excludes Linux, but that is not a successful Linux build or a support guarantee.
-- This identifies a localized build blocker, not six demonstrated gameplay bugs or a general
-  game-quality verdict. Runtime gameplay, networking, rendering, packaging, and performance
-  remain untested. The repository's **77** regressions are separate from Lyra coverage.
+- The initial native build failed with exit code **6** on six **CommonUser** unreachable-code
+  diagnostics. A local deterministic repair changed only `CommonUserBasicPresence.cpp` and
+  `CommonSessionSubsystem.cpp` in the separate working copy: four dead breaks were removed,
+  a first-return range loop became guarded first-element handling, and a literal-zero disabled
+  branch became `if constexpr`. Existing first-element behavior and disabled code remain intact;
+  this does not establish that those semantics are the desired multiplayer behavior.
+- The strict native rebuild passed without relaxing compiler checks; both native project modules
+  were verified. All **818** original vault source/config/descriptor hashes remain unchanged.
+  The working-copy hashes match exactly the intended two-file repair boundary.
+- All **9** synthetic repair regressions, **10** synthetic editor-lifecycle regressions, and
+  **77** repository regressions pass. These do not constitute Lyra gameplay coverage.
+- The first headless startup reached initialization but timed out without verified normal exit.
+  Its process was reconciled as gone, with no logged fatal/error and no source changes. This is
+  preserved as interrupted evidence, not classified as a build failure or proven engine crash.
+- A separate check using Epic's documented full-editor `ExecutePythonScript` lifecycle passed:
+  initialization and an owned readiness marker, normal shutdown, exit **0**, zero logged errors
+  or fatals, and unchanged original/repaired source hashes. Required installed scripting plugins
+  were enabled only for that command-line session; no persistent project settings changed.
+- Rendering quality, gameplay, networking, packaging, performance, and human approval remain
+  unverified. Graphical process/window observation must be recorded separately from startup.
 
-Evidence: `.studio/runs/lyra-native-bootstrap-efc5fa3a5f57/`,
-`.studio/evidence/lyra-linux-diagnosis-metadata-2026-11-03.json`, and
-`.studio/evidence/lyra-control-flow-metadata-2026-11-03.json`. Only version/platform metadata,
-hashes, compiler-warning categories, and functional statement categories were returned to model
-context; raw sample source/assets were not. No authoritative public fix for this exact build
-was established. Next: license-safe review and a targeted CommonUser source repair in the working
-copy, then a bounded rebuild and startup check—not a redownload or blanket warning suppression.
+Evidence:
+
+- `.studio/runs/lyra-native-bootstrap-efc5fa3a5f57/` — original failed build, preserved.
+- `.studio/runs/lyra-commonuser-linux-fix-d6bb17d94586/` — strict native rebuild and repair tests.
+- `.studio/evidence/lyra-startup-timeout-reconciliation-2026-11-03.json` — interrupted startup.
+- `.studio/runs/lyra-controlled-startup-a180ce322441/` — successful full editor lifecycle check.
+- `.studio/evidence/lyra-interactive-editor-2026-11-03.json` — graphical launch record when started.
+
+Only version/platform metadata, hashes, functional categories, and test results were returned to
+model context; raw sample source/assets and raw engine diagnostics were not. Local mechanical
+repair does not settle the code-versus-content AI-input license boundary below.
+
+## Open the repaired local project
+
+```sh
+python3 .studio/launch_lyra.py
+```
+
+The guarded launcher requires verified startup, unchanged source hashes, native modules, a
+graphical session, no competing editor, and at least **8 GiB** free VRAM. It keeps integration/editor
+ownership until normal exit. Do not run it again while an editor is active or interrupt existing
+user services to free GPU memory. The first graphical session uses command-line-only offline,
+`NoIni`, and file-server-disable settings; settings changes are intentionally not saved.
+Confirm the window with the human, then test Play separately. Close the editor normally before
+other integration operations. No graphical screenshot or unobserved gameplay is approved here.
 
 ## Recommended foundation: Epic Lyra Starter Game
 
