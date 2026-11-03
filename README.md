@@ -66,6 +66,11 @@ bounded tasks, and larger local candidates with Unreal closed. Memory plans are 
 
 [Model research, exact sizes, and setup](docs/MODELS.md) · [Pins and hashes](models.lock.json)
 
+The [current AI coding architecture/tooling review](docs/AI_CODING_RESEARCH.md) adds new
+mixed-precision/ternary research candidates and documents open qualification gates: real OpenCode
+tool transport/compaction, probe freshness, request accounting, and spend/privacy enforcement.
+These are not silently fixed or proven by metadata and source tests; profiles remain inactive.
+
 ## Native verification after setup
 
 ```sh

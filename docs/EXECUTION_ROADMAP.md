@@ -2,9 +2,15 @@
 
 Snapshot: **2026-11-02** · Primary target: **Unreal / Linux** · Prepared engine family: **5.8**
 
-**Current position:** project preparation is complete; native Unreal execution has not begun.
+**Current position:** source preparation is implemented; native Unreal execution and model-profile
+qualification have not begun. The review identified additional activation/hardening gates below.
 **Next action:** step **01**, a read-only storage/GPU/toolchain readiness check.
 **First milestone:** a playable Linux lab with native test evidence and an inspected visual baseline.
+
+Review update, **2026-11-02**: command behavior, task prerequisites, public model availability,
+and exact HF pins were checked again. See [AI_CODING_RESEARCH.md](AI_CODING_RESEARCH.md) for the
+current architecture/technique review, sources, and open findings **H1–H7**. Those findings are
+not runtime fixes or proof that an inactive profile is ready for unattended use.
 
 ## How to use this document
 
@@ -20,6 +26,9 @@ Snapshot: **2026-11-02** · Primary target: **Unreal / Linux** · Prepared engin
   scope. A source check, engine test, screenshot review, and model benchmark prove different things.
 - For an AI work session, provide only the active step, its relevant reference, and a bounded
   task contract. Do not load this whole roadmap and every linked document into every task.
+- The current runner requires nonempty `steps` and `verification`, deadlines/timeouts no greater
+  than 3,600 seconds, 1–3 attempts, and a context handoff within 20,000 characters including the
+  contract. This roadmap alone exceeds that cap: select small explicit task inputs instead.
 
 ## Progress already made
 
@@ -46,6 +55,12 @@ remeasure before installation. Existing Ollama models were preserved, not unload
 Git inspection during roadmap preparation showed `main`, an initial staged implementation,
 and no commits yet. Preserve that staging and review it before making a checkpoint.
 
+The read-only review remeasured **73.43 GiB free disk**, **62.09 GiB RAM**, and approximately
+**1.16 GiB GPU memory in use**. Installed version strings were OpenCode **2.2.5**, Ollama
+**0.31.2**, and llama-server **0.8.0 / `8642541`**; these are not model/CUDA compatibility passes.
+`UE_ROOT` remains unset. Host **Fedora 44 / Clang 22.1.8** must not be mistaken for Epic's
+reviewed engine toolchain. Recheck all values when resuming; no resources have been reserved.
+
 ### Prepared model shortlist — not a ranking proven on this workstation
 
 Weight sizes are decimal GB, **not total runtime VRAM**. Exact revisions/hashes live in
@@ -68,6 +83,10 @@ Prepared free cloud references, subject to renewed availability checks:
 The sensible starting policy is free cloud coding while Unreal uses the GPU, a smaller local
 model only if measured headroom permits, and larger local candidates with Unreal closed.
 Do not download the entire shortlist or treat an advertised context size as an affordable setting.
+All five pinned revision/filename/size/advertised-hash combinations were reconfirmed. New research
+candidates such as **GSQ-RCO Qwen3.8** and **ternary Bonsai 2** are documented separately, not
+silently added to the lock file or accepted as working models. LFM3's own card advises against
+agentic coding; small size/popularity alone is not a selection criterion.
 
 ## Execution order — required native milestone
 
@@ -88,6 +107,9 @@ Inspect available mounted drives and separately check free space on any proposed
 An unavailable host compiler is a setup finding, not permission to install arbitrary packages.
 Confirm the chosen editor's supported Linux distribution, Vulkan/driver, and bundled toolchain
 requirements against Epic's current documentation linked in [UNREAL.md](UNREAL.md).
+UE 5.8's release notes specify Clang 20.1.8 and reference Ubuntu/Rocky/RHEL configurations;
+validate the installed engine's toolchain on this Fedora host rather than replacing system
+packages or assuming host Clang 22 is the engine compiler.
 
 **Completion gate:** choose an engine location and allow room for the download/extraction,
 installed editor, shader/derived caches, project intermediates, packages, and future models.
@@ -102,6 +124,7 @@ stop existing services, upgrade drivers, or move the project without the owner's
 git status --short --branch
 git diff --stat
 git diff --cached --stat
+python3 studio.py task validate tasks/unreal-source.json
 python3 studio.py task context tasks/unreal-source.json
 python3 studio.py task run tasks/unreal-source.json --execute
 ```
@@ -166,6 +189,9 @@ python3 studio.py unreal build --execute
 completes successfully. Inspect `.studio/evidence/unreal-build-0.log` and resolve real API,
 compiler, or toolchain errors with small reviewed changes. This is the first native compilation
 gate; the portable state test does not predict that it will pass unchanged.
+Current wrapper timeouts use generic “failed” wording too. On timeout, inspect logs and owned
+process/build state, checkpoint the outcome as unknown until reconciled, and do not blindly retry
+or change a running task/runner to extend its budget. See review finding H5.
 
 If blocked, save the error and checkpoint. Optional step 11 may be brought forward deliberately
 for approved cloud assistance; installing local weights is not a prerequisite to fixing the build.
@@ -183,6 +209,9 @@ python3 studio.py unreal prepare --execute
 the generated map and material present under `projects/NovanodeLab/Content/Generated/`.
 The generator refuses unmarked existing assets; investigate such a conflict rather than deleting
 or overwriting someone else's files. Generated Unreal content is ignored and must be reproducible.
+Already marked assets are currently **reused, not rebuilt**. A later material/map recipe change
+needs a reviewed versioned regeneration/migration plan; a successful `prepare` alone does not
+prove those existing assets changed. See H6 before visual/material iteration.
 
 The saved map starts blank: `StudioGameMode` constructs the lab at runtime. An empty editor view
 before pressing Play is expected, not evidence that the runtime room failed to generate.
@@ -250,6 +279,8 @@ python3 studio.py task run tasks/unreal-smoke.json --execute
 prerequisite rejection, closed-door ray blocking, open-door ray clearance, and correct reference
 outcome. Inspect build/test/smoke logs on failure; an old report is not evidence for a new build.
 Also manually launch the packaged application graphically and repeat step 07's gold path.
+Record the source checkpoint, engine version, build time, and inspected artifact identity as well:
+the current package check only verifies that a launcher exists, not a source-to-build manifest (H5).
 
 NullRHI smoke does not verify rendering, real input, or game feel. Packaging is an internal build,
 not approval to distribute, upload, sign, or publish it.
@@ -291,18 +322,30 @@ python3 studio.py models config --profile free
 
 1. Review `.studio/opencode/free.json` and [MODELS.md](MODELS.md). Confirm explicit `:free` routes,
    zero-price ceilings, privacy-compatible routing, scoped permissions, and no paid fallback.
+   `data_collection: deny` is not ZDR; the generated draft does not set `provider.zdr`. Decide
+   what retention policy studio IP requires, and defer cloud use if no acceptable route exists.
 2. Review existing project/inherited OpenCode configuration. Manually merge or activate the draft
    as appropriate; do not blindly overwrite `opencode.json`, `opencode.jsonc`, or `.opencode/` settings.
+   Check inherited plugins, warming/background summaries, and maintenance model routing. Keep
+   warming and background summaries off for the free-request budget; review a small agent-step
+   allowance. Provider restrictions do not form an allowlist of only the three declared model IDs.
 3. In OpenCode, use `/connect` → OpenRouter to enter credentials directly in its interface,
    never in chat, source files, screenshots, or logs. Do not purchase credits as an implicit setup step.
 4. Use `/models` to select an available intended free route. An existing session selection can
    override the new-work default. Configuration reloads automatically; no restart is normally needed.
 5. Authorize one small non-sensitive tool-using task and inspect its actual result/usage before
    sending studio IP. Respect current request quotas and stop/checkpoint on exhausted capacity.
+   Qualify request-body price/privacy behavior with a credential-free mock or approved redacted
+   observation; unit-tested config dictionaries alone are not end-to-end enforcement. Record
+   actual model/provider identifiers, requests, retries, and summary calls without credentials.
 
 **Completion gate:** an approved free route demonstrably works in this project, without paid
 fallback or permission bypass. Catalog metadata and authentication alone are not inference QA.
 If no privacy/parameter-compatible free route exists, defer it rather than relaxing protections.
+Use a small **single-session** plan → edit → test → review loop with targeted file/symbol retrieval.
+The runner does not automatically cap or record OpenCode requests. Review H3/H4/H7 and the
+research note's quota-conscious settings before granting broad tools. Watcher ignores are not
+security/context exclusions, and read-deny rules do not sandbox shell/search/plugin execution.
 
 ### 12 — Fix the highest-value visual and interaction defects
 
@@ -356,6 +399,11 @@ Choose **one** candidate, not every row in the shortlist. Existing Ollama models
 approved baseline, but the pinned GGUF commands below do not reuse an Ollama alias automatically.
 Confirm that a reviewed CUDA llama.cpp build supports the chosen architecture/template; this
 pipeline does not install or upgrade that runtime. Preserve existing services and model files.
+Before activating the local draft, qualify **H1/H2**: real OpenCode streaming, automatic tool
+selection, repeated tool/result turns, error handling, and a session near its context limit.
+The current 16K server/profile combination has not been tested with V2 compaction's documented
+reserve behavior or the full instruction/tool overhead. Review a supported reserve/context/output
+configuration rather than assuming that the synthetic probe establishes a usable coding context.
 
 After approving the size/location, this example downloads the smaller pinned candidate:
 
@@ -386,9 +434,15 @@ closed by its owner. Weight/context/model labels do not establish actual memory 
 
 **Completion gate:** the pinned model loads, actual memory/speed are recorded, and a fresh
 `.studio/evidence/model-probe-<profile>.json` verifies the synthetic tool/result round trip.
+Accept only the **current invocation's** successful result and verify the owned server/model/hash.
+The current probe has no timestamp/run ID, does not establish serving identity, and leaves an old
+success file behind if a later probe fails: do not accept that old file as a new pass. A short
+thinking/output budget can also truncate a capable model; distinguish that from wrong code (H1/H2).
 The probe executes no generated tool and does not prove coding quality. Then review/merge the
 inactive local profile without overwriting existing configuration and select it through `/models`.
 Keep local routing explicit, text-only, and without automatic cloud fallback; vision is not tested.
+Only promote it after the actual OpenCode transport/context qualification above passes. The later
+hardening task must add provenance/failure-invalidation regressions before unattended reliance.
 
 ### 15 — Benchmark approved models on the same real tasks
 
@@ -399,6 +453,8 @@ Keep local routing explicit, text-only, and without automatic cloud fallback; vi
 Use the same starting files, task boundaries, acceptance tests, context/output budgets, and
 allowed tools. Use separate reviewable copies/checkpoints so one candidate's edits do not become
 another candidate's starting advantage. Run candidates sequentially unless delegation is authorized.
+Keep the small tool surface and model-specific reasoning/template settings explicit. Record the
+cloud endpoint/provider when exposed; a hosted slug does not pin an exact deployed quant/revision.
 
 Suggested bounded tasks, in increasing complexity:
 
@@ -411,6 +467,9 @@ Record success, attempts, tool-call failures, compile/test outcomes, latency, pr
 tokens, actual VRAM, and human correction/review time. Record exact model/quant, runtime version,
 context, reasoning/output settings, and route. Separate truncation/rate-limit/transport failures
 from wrong code; retry only within the approved attempt/request budget.
+Compare ordinary Q4 versus any approved GSQ-RCO/ternary experiment on the **same tool/coding tasks**,
+not just a card's perplexity or coding average. Speculative decoding/MTP, aggressive KV quantization,
+extra retrieval infrastructure, and multi-agent review come later only if measurements justify them.
 
 **Completion gate:** a small reproducible scorecard under `.studio/evidence/model-benchmarks/`
 supports choices by task type. Model-card scores, popularity, one happy-path probe, and aggressive
@@ -447,6 +506,7 @@ the recommended progression; explicitly deferred optional integrations do not bl
   `UE_ROOT`, and run `.github/workflows/unreal-linux.yml` manually.
 - [ ] Verify fresh build/prepare/test/package/smoke evidence and allowlisted artifact retention.
 - [ ] Keep ordinary source CI separate. Never execute arbitrary fork/PR code on the licensed runner.
+- [ ] Close the timeout/build-identity gaps in H5 before relying on unattended native outcomes.
 
 **Done when:** one reviewed revision has a native CI pass. Remote creation, publication, and runner
 access require separate approval; the prepared workflow alone is not a CI result.
@@ -551,6 +611,8 @@ Never include credentials or authorization headers in handoffs, screenshots, or 
 - [README](../README.md): project entry points and current command families.
 - [UNREAL.md](UNREAL.md): Linux installation boundary, native gates, and Epic references.
 - [MODELS.md](MODELS.md) and [model pins](../models.lock.json): research, memory policy, profiles, probes.
+- [AI_CODING_RESEARCH.md](AI_CODING_RESEARCH.md): current primary sources, architecture/quantization
+  alternatives, qualification findings H1–H7, and what remains unimplemented.
 - [VERIFICATION.md](VERIFICATION.md): recorded checks and their limits.
 - [PLAN.md](PLAN.md): short delivery plan plus clearly marked legacy history.
 - [WORKFLOW.md](WORKFLOW.md), [ASSETS.md](ASSETS.md), [SECURITY.md](SECURITY.md): consult only for the active task.

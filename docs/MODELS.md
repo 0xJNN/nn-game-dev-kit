@@ -1,5 +1,11 @@
 # Model shortlist — checked 2026-11-02
 
+Re-reviewed on 2026-11-02: all five immutable file/revision/size/advertised-hash pins match HF
+metadata, and 13 free text/tool routes pass the current public-catalog filter. No candidate inference was run.
+See [AI_CODING_RESEARCH.md](AI_CODING_RESEARCH.md) for the expanded current architecture/tooling
+review, additional candidates, sources, and qualification findings **H1–H7**. Existing pins and
+active configuration were not changed by that review.
+
 ## Evidence, not a universal ranking
 
 This shortlist uses live OpenRouter metadata, official Hugging Face model cards, and GGUF file
@@ -40,6 +46,21 @@ Qwen3-Coder-Next and giant DeepSeek/GLM models should not be selected from activ
 The 3090 is Ampere. Do not assume native FP4/NVFP4 acceleration from newer GPU recipes. The
 initial runtime plan uses GGUF with a reviewed CUDA-capable llama.cpp build. Architecture,
 chat-template, reasoning, and function-call support must be tested per model/runtime version.
+
+### Additional research candidates — not installed or added to the CLI lock file
+
+The first shortlist was not exhaustive. Public metadata also confirms Qwen3.8 **GSQ-RCO IQ3_S
+(11.77 GB)** and **IQ2_XS (8.42 GB)**, Qwen3.5-4B Q4 (2.74 GB), Devstral Small 2 24B Q4
+(14.33 GB), gpt-oss-20b GGUF Q4_K_M (11.62 GB), and GLM-4.7-Flash Q4 (18.31 GB).
+These are alternatives to qualify, not proven improvements or valid new `studio.py` profile names.
+
+Newer ternary **Bonsai 2 27B** representations are 5.95/7.21/7.63 GB, but custom/runtime-version
+requirements and the publisher's documented tool/cache issues keep them experimental. GSQ-RCO's
+same-backbone mixed-precision approach deserves an A/B test before adding a runtime fork.
+The inspected NVIDIA Bolt file is **6.18 GB**, despite the repository's `4GB` name; its focus is
+device assistants, not demonstrated best repository coding. LiquidAI explicitly advises against
+agentic coding for LFM3-1.7B. Do not select a tiny/trending model from tool support alone.
+Exact inspected files, metadata and primary references are in the research note and its evidence.
 
 ## Shared GPU policy
 
@@ -82,6 +103,17 @@ The probe makes two local synthetic requests, checks structured tool arguments a
 tool-result round trip, and executes **no generated tool**. It does not benchmark coding quality.
 If a runtime cannot parse the model/template, stop and resolve compatibility before giving it
 filesystem tools. This project does not silently upgrade your llama.cpp/Ollama installations.
+**Qualification caveat (H1):** the current probe is one forced call/result pair, not a full
+OpenCode/streaming/automatic/multi-turn test. It does not establish serving model identity or put a
+timestamp/run ID in evidence, and failure leaves a previous success report untouched. Accept only
+the current invocation's successful result, verify the owned runtime/model/hash, and add freshness
+and failure-invalidation regressions before trusting unattended probe reports.
+
+**Small-context caveat (H2):** the 16K local profile has not been tested with full OpenCode schema
+overhead and compaction; current V2 documentation describes a minimum 16K reserve alongside
+percentage buffers. Verify that interaction on the installed version, not just the synthetic probe.
+Retained history, instructions/tools, new input, reasoning/output, and reserve must all fit. Thinking
+truncated by the probe's 1K or profile's 4K output limit is not proof of poor coding capability.
 
 ## Free OpenRouter candidates
 
@@ -90,7 +122,8 @@ Confirmed in the live public catalog with zero advertised prompt/completion pric
 - **Coding first candidate:** `cohere/north-mini-code:free`.
 - **Coding alternative:** `recursive/flint-v1.0:free`.
 - **Visual-review candidate:** `nvidia/nemotron-3.5-super-vl:free` (image input advertised).
-- **Additional reasoning/review experiments:** `thinkingmachines/inkling:free` and
+- **Additional reasoning/review experiments:** `thinkingmachines/inkling:free`,
+  `thinkingmachines/inkling-small:free`, `nvidia/nemotron-3.5-lightning:free`, and
   `nvidia/nemotron-3-ultra-550b-a55b:free` were listed; not selected as coding defaults without tests.
 
 Run `models refresh-free` to check public metadata again. The filter finds free text/tool routes;
@@ -102,6 +135,9 @@ OpenRouter currently documents **20 requests/minute**, and **50 requests/day** b
 credit purchases or **1,000/day** at/above that threshold. These are requests, not completed tasks;
 one agent task can consume many. No purchase is required or authorized by this project.
 Stop/checkpoint on rate limits, and switch deliberately to an approved local profile. No paid fallback.
+The quota is not reset by selecting another free model. Track retries, compaction, and maintenance
+requests too; the studio runner currently has no external OpenCode request limiter or automatic
+usage import. Keep warming/background summaries off and start with a small bounded task allowance.
 
 ## OpenCode V2 profiles
 
@@ -121,16 +157,26 @@ takes precedence over the configured default for new work.
 - Free profile restricts providers to OpenRouter, uses explicit `:free` models, and sets provider
   price ceilings to zero. `data_collection: deny` and required-parameter routing fail closed if
   no compatible route exists. Review OpenRouter/account privacy separately before sending IP.
+  **This is not a model-ID allowlist or an end-to-end-tested spend/privacy guarantee.** The generated
+  draft does not set `provider.zdr`; data-collection filtering is not the same as zero retention.
+  Qualify actual request behavior and approve an appropriate retention policy before studio-IP use.
 - Local profile restricts providers to the named localhost server; no automatic cloud fallback.
 - Shell/edits/external directories ask for permission; subagents, paid image generation, web
   search, and inherited MCP servers are disabled. Permissions are not an OS/network sandbox.
-- Context/outputs are capped; no warming, helper swarm, or giant Unreal cache files in context.
+- Context/outputs are capped. No helper swarm or extra warming is configured by these drafts,
+  but inherited warming, maintenance agents, plugins, and background compaction need review.
+  `watcher.ignore` alone does not keep Unreal caches out of tool reads or model context.
 - The 8K cloud output cap is a bounded-worker default, not a quality-optimal benchmark setting.
   Hard reasoning can truncate at that cap; review/increase a task's budget deliberately rather
   than misclassifying truncation as proof that a model cannot code.
 - Higher-authority/global configuration can override project settings. Verify the resolved setup.
 - OpenCode request usage is **not automatically imported into the studio ledger**. Record receipts
   or add tested instrumentation before claiming per-feature accounting is complete.
+
+Prefer one coding session, a small tool surface, progressive skills/current API references,
+targeted repository search, deterministic checks, and a compact handoff. Code Mode/lazy tool
+discovery are useful only when the chosen model handles them reliably; adding every MCP server,
+a vector database, paid server tools, or another agent framework is not the starting architecture.
 
 ## Benchmark before choosing the permanent default
 

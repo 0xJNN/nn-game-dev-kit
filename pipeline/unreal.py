@@ -147,7 +147,11 @@ def run(action: str, execute=False, root: Path = ROOT) -> dict | int:
         timeout = config(root)["unreal"]["build_timeout_seconds"] if action in {"build", "package"} else config(root)["unreal"]["test_timeout_seconds"]
         for index, argv in enumerate(commands(action, ue, root)):
             result = run_process(argv, root, timeout, evidence / f"unreal-{action}-{index}.log")
-            if result["exit_code"] != 0 or result["reason"] != "completed":
+            if result["reason"] != "completed":
+                log_notice = f"see {result['log']}" if result.get("log") else "no command log was produced"
+                raise StudioError(f"Unreal {action} outcome unknown ({result['reason']}); {log_notice}. "
+                                  "Inspect logs and owned process/build state; reconcile before retrying.")
+            if result["exit_code"] != 0:
                 raise StudioError(f"Unreal {action} failed; see {result['log']}")
         if action == "test":
             return verify_automation(stale)

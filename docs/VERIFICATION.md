@@ -1,5 +1,36 @@
 # Verification record
 
+## Roadmap and AI coding source review — 2026-11-02 UTC
+
+- All 23 roadmap steps were checked against the current CLI/adapters/task constraints. Local
+  Markdown links, fenced JSON, ordered headings, and shell-example parser syntax passed checks.
+- The bounded `roadmap-research-review` run passed Unreal source validation and all **70**
+  Python/portable C++ regression tests. Ruff 0.14.3 passed using its existing offline cache.
+- Doctor still reports Unreal not ready (`UE_ROOT` unset). Ten native/model command previews
+  passed without executing the engine, downloading weights, loading models, or invoking inference.
+- The live OpenRouter snapshot contained 451 entries and 13 zero-advertised-price text/tool
+  routes passing the conservative filter. This is metadata, not endpoint availability or inference QA.
+- All five locked HF revision/filename/byte-count/advertised-SHA-256 combinations matched their
+  immutable revision metadata. Additional GSQ-RCO, ternary, small-model, and older coding
+  alternatives were researched but not promoted to pins, installed, or benchmarked.
+- Read-only host inspection recorded Fedora 44, host Clang 22.1.8, OpenCode 2.2.5, Ollama 0.31.2,
+  llama-server 0.8.0 / `8642541`, RTX 3090 / 24 GiB, 62.09 GiB RAM, and 73.43 GiB free disk.
+  These do not prove engine/toolchain/model/CUDA compatibility or reserve resources.
+- An **offline mocked** probe reproduction confirmed missing serving-identity/freshness guarantees:
+  an unrelated response model is not rejected, reports have no timestamp/run ID, and a later
+  failed probe leaves an old success file. No completion request was sent by that reproduction.
+- Open findings **H1–H7** are recorded in [AI_CODING_RESEARCH.md](AI_CODING_RESEARCH.md) and
+  integrated into the roadmap's activation/native gates. This documentation review did **not**
+  implement those runtime fixes, test real OpenCode compaction/streaming, or authorize studio-IP use.
+
+Evidence: `.studio/runs/roadmap-research-review-9e4ce560ed9b/`,
+`.studio/evidence/roadmap-research-doc-check.json`, `.studio/evidence/roadmap-dry-run-audit.json`,
+and `.studio/research/2026-11-02-roadmap-review/` (public snapshots and `probe-audit-reproduction.json`).
+Native Unreal compile/render/package/input, model inference/quality/transport, actual free-route
+price/privacy enforcement, and human approval remain pending. No active configuration, credentials,
+model pins, runtime code, staging, commits, remote, or publishing operation was changed by this review.
+This does not measure or claim zero cost for the separate coding-agent conversation.
+
 ## Unreal/Linux migration preparation — 2026-11-02 UTC
 
 - 70 Python regression tests passed, including compilation/execution of the exact portable

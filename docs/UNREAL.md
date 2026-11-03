@@ -29,6 +29,11 @@ blindly to suppress the check: review APIs/build settings for that engine versio
 Use Epic's supported Linux environment/toolchain; the portable host C++ test is not proof
 that Unreal's bundled compiler, SDK, distro, or Vulkan setup is ready.
 
+Read-only review on 2026-11-02 found Fedora 44 with host Clang 22.1.8, 73.43 GiB free on the
+project filesystem, and no `UE_ROOT` configured. UE 5.8 release notes specify Clang 20.1.8 and
+reference Ubuntu/Rocky/RHEL configurations. This is a toolchain compatibility gate, not an instruction
+to replace the host compiler, install Ubuntu, or assume native Fedora verification has passed.
+
 ## Preview, build, prepare, play
 
 ```sh
@@ -45,6 +50,8 @@ map under `Content/Generated/`; the C++ game mode constructs the room when play 
 `unreal editor --execute` opens the editor; press Play to see the runtime room. The empty editor
 map before Play is expected, not a saved art scene. No asset pack, plugin account, or marketplace
 content is downloaded. Existing unmarked assets are refused, not overwritten.
+Already marked assets are reused without rebuilding. If the generator recipe changes later,
+plan a reviewed versioned regeneration/migration; rerunning `prepare` alone does not update them.
 
 The source includes a larger interior, modular bench/equipment details, light panels, local
 interaction traces, a sliding collision gate, power/reference consoles, and first-person controls.
@@ -74,6 +81,12 @@ python3 studio.py unreal smoke --execute
 
 The portable test compiles the exact engine-independent `LabState.h` with the host C++ compiler.
 It proves state/formula behavior only, not the Unreal actors, module, UHT, shaders, or packaging.
+
+Review findings H5/H6 in [AI_CODING_RESEARCH.md](AI_CODING_RESEARCH.md) remain open: the native
+wrapper currently uses generic “failed” text for timeouts too, and package acceptance only checks
+launcher existence rather than a build-identity manifest. Inspect process/log state after timeout,
+reconcile before retrying, and record the source/engine/artifact identity for each native result.
+These are documented qualification/hardening gates, not fixes silently applied in this review.
 
 ## CI and evidence
 

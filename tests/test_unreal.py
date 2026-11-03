@@ -44,6 +44,100 @@ class UnrealTests(ProjectTest):
         self.assertIn("-clientconfig=Development", argv)
         self.assertNotIn("-platform=Mac", argv)
 
+    def test_interrupted_commands_are_unknown_and_not_retried(self):
+        generated_map = self.root / "projects/NovanodeLab/Content/Generated/Maps/NovanodeLab.umap"
+        generated_map.parent.mkdir(parents=True)
+        generated_map.touch()
+        outcomes = [("timeout", -15), ("timeout", 0), ("log_limit", -15), ("deadline", None)]
+        for action in ("build", "prepare", "test", "package", "smoke"):
+            for reason, exit_code in outcomes:
+                result = {"reason": reason, "exit_code": exit_code, "seconds": 0.1}
+                if reason != "deadline":
+                    result["log"] = str(self.root / f".studio/evidence/unreal-{action}-0.log")
+                with (
+                    self.subTest(action=action, reason=reason, exit_code=exit_code),
+                    patch("pipeline.unreal.platform.system", return_value="Linux"),
+                    patch("pipeline.unreal.engine_root", return_value=self.root / "engine"),
+                    patch("pipeline.unreal.commands", return_value=[["first"], ["second"]]),
+                    patch("pipeline.unreal.run_process", return_value=result) as process,
+                    patch("pipeline.unreal.verify_automation") as automation,
+                    patch("pipeline.unreal.verify_smoke") as smoke,
+                ):
+                    with self.assertRaises(StudioError) as error:
+                        run(action, execute=True, root=self.root)
+                    message = str(error.exception)
+                    self.assertIn(f"Unreal {action} outcome unknown ({reason})", message)
+                    self.assertIn("owned process/build state", message)
+                    self.assertIn("reconcile before retrying", message)
+                    self.assertNotIn("failed", message)
+                    if "log" in result:
+                        self.assertIn(result["log"], message)
+                    else:
+                        self.assertIn("no command log was produced", message)
+                    process.assert_called_once()
+                    automation.assert_not_called()
+                    smoke.assert_not_called()
+
+    def test_confirmed_nonzero_exit_remains_a_failure(self):
+        log = str(self.root / ".studio/evidence/unreal-build-0.log")
+        with (
+            patch("pipeline.unreal.platform.system", return_value="Linux"),
+            patch("pipeline.unreal.engine_root", return_value=self.root / "engine"),
+            patch("pipeline.unreal.commands", return_value=[["first"], ["second"]]),
+            patch("pipeline.unreal.run_process", return_value={
+                "reason": "completed", "exit_code": 1, "log": log,
+            }) as process,
+        ):
+            with self.assertRaisesRegex(StudioError, "Unreal build failed") as error:
+                run("build", execute=True, root=self.root)
+            self.assertIn(log, str(error.exception))
+            self.assertNotIn("unknown", str(error.exception))
+            process.assert_called_once()
+
+    def test_completed_build_preserves_success_scope(self):
+        log = str(self.root / ".studio/evidence/unreal-build-0.log")
+        with (
+            patch("pipeline.unreal.platform.system", return_value="Linux"),
+            patch("pipeline.unreal.engine_root", return_value=self.root / "engine"),
+            patch("pipeline.unreal.commands", return_value=[["first"], ["second"]]),
+            patch("pipeline.unreal.run_process", return_value={
+                "reason": "completed", "exit_code": 0, "log": log,
+            }) as process,
+        ):
+            result = run("build", execute=True, root=self.root)
+            self.assertEqual(process.call_count, 2)
+        self.assertEqual(result["status"], "built")
+        self.assertEqual(result["human_approval"], "pending")
+        self.assertEqual(result["log"], log)
+
+    def test_completed_native_commands_still_require_fresh_evidence(self):
+        generated_map = self.root / "projects/NovanodeLab/Content/Generated/Maps/NovanodeLab.umap"
+        generated_map.parent.mkdir(parents=True)
+        generated_map.touch()
+        reports = {
+            "prepare": ("unreal-prepare.json", {"status": "assets_prepared"}),
+            "test": ("unreal-automation/index.json", self.report()),
+            "smoke": ("unreal-startup.json", self.smoke_report()),
+        }
+        for action in ("prepare", "test", "smoke", "package"):
+            if action in reports:
+                name, report = reports[action]
+                stale = self.root / ".studio/evidence" / name
+                atomic_json(stale, report)
+            with (
+                self.subTest(action=action),
+                patch("pipeline.unreal.platform.system", return_value="Linux"),
+                patch("pipeline.unreal.engine_root", return_value=self.root / "engine"),
+                patch("pipeline.unreal.run_process", return_value={
+                    "reason": "completed", "exit_code": 0,
+                }) as process,
+            ):
+                with self.assertRaises(StudioError):
+                    run(action, execute=True, root=self.root)
+                process.assert_called_once()
+                if action in reports:
+                    self.assertFalse(stale.exists())
+
     def report(self):
         names = ["Novanode.State.Prerequisites", "Novanode.State.Period", "Novanode.State.InvalidInputs"]
         return {"failed": 0, "notRun": 0, "inProcess": 0, "tests": [
