@@ -16,6 +16,7 @@ class TaskTests(ProjectTest):
         result = run_task(self.contract(), execute=True, root=self.root)
         self.assertEqual(result["status"], "machine_verified")
         self.assertEqual(result["human_approval"], "pending")
+        self.assertFalse(result["reconciliation_required"])
         self.assertEqual(len(result["commands"]), 2)
         self.assertEqual(load_json(self.root / result["evidence"] / "report.json")["status"], "machine_verified")
 
@@ -33,8 +34,36 @@ class TaskTests(ProjectTest):
         )
         result = run_task(contract, execute=True, root=self.root)
         self.assertEqual(result["status"], "deadline_exceeded")
+        self.assertEqual(result["stop_reason"], "timeout")
+        self.assertTrue(result["reconciliation_required"])
         self.assertLess(result["seconds"], 5)
         self.assertEqual(len(result["commands"]), 1)
+
+    def test_expired_deadline_never_launches_a_command(self):
+        contract = self.contract()
+        with patch("pipeline.tasks.time.monotonic", side_effect=[0, 11, 11]):
+            with patch("pipeline.tasks.run_process") as command:
+                result = run_task(contract, execute=True, root=self.root)
+        command.assert_not_called()
+        self.assertEqual(result["status"], "deadline_exceeded")
+        self.assertEqual(result["stop_reason"], "deadline")
+        self.assertEqual(result["commands"], [])
+        self.assertFalse(result["reconciliation_required"])
+
+    def test_deadline_after_known_failure_prevents_retry(self):
+        contract = self.contract(
+            limits={"deadline_seconds": 10, "command_timeout_seconds": 1,
+                    "max_attempts": 3, "budget_usd": "0"},
+        )
+        with patch("pipeline.tasks.time.monotonic", side_effect=[0, 0, 0, 11, 11]):
+            with patch("pipeline.tasks.run_process", return_value={
+                "reason": "completed", "exit_code": 1, "seconds": 1,
+            }) as command:
+                result = run_task(contract, execute=True, root=self.root)
+        self.assertEqual(command.call_count, 1)
+        self.assertEqual(result["status"], "deadline_exceeded")
+        self.assertEqual(result["stop_reason"], "deadline")
+        self.assertFalse(result["reconciliation_required"])
 
     def assert_unknown_stops(self, outcome, phase="steps", stop_reason=None):
         commands = {
@@ -86,7 +115,8 @@ class TaskTests(ProjectTest):
                 self.assert_unknown_stops({"reason": reason, "exit_code": None, "seconds": 0.01})
 
     def test_signal_or_missing_exit_status_never_retry(self):
-        for exit_code, reason in ((-9, "signal"), (None, "unknown_exit_code")):
+        for exit_code, reason in ((-9, "signal"), (None, "unknown_exit_code"),
+                                  (False, "unknown_exit_code"), ("0", "unknown_exit_code")):
             with self.subTest(exit_code=exit_code):
                 self.assert_unknown_stops(
                     {"reason": "completed", "exit_code": exit_code, "seconds": 0.01},
@@ -196,6 +226,50 @@ class TaskTests(ProjectTest):
         self.assertTrue(report["commands"][0]["argv"])
         self.assertIn("Partial output", (self.root / report["commands"][0]["log"]).read_text())
         self.assertTrue((self.root / "result.txt").exists())
+
+    def test_keyboard_interrupt_without_scope_violation_remains_interrupted(self):
+        contract = self.contract(
+            limits={"deadline_seconds": 10, "command_timeout_seconds": 1,
+                    "max_attempts": 3, "budget_usd": "0"},
+        )
+
+        def interrupt(*args):
+            (self.root / "result.txt").write_text("Preserved allowed work")
+            raise KeyboardInterrupt
+
+        with patch("pipeline.tasks.run_process", side_effect=interrupt) as command:
+            with self.assertRaises(KeyboardInterrupt):
+                run_task(contract, execute=True, root=self.root)
+        self.assertEqual(command.call_count, 1)
+        report = load_json(next((self.root / ".studio/runs").glob("*/report.json")))
+        self.assertEqual(report["status"], "interrupted")
+        self.assertEqual(report["stop_reason"], "interrupted")
+        self.assertTrue(report["reconciliation_required"])
+        self.assertNotIn("unexpected_writes", report)
+        self.assertEqual(report["human_approval"], "pending")
+        self.assertEqual((self.root / "result.txt").read_text(), "Preserved allowed work")
+
+    def test_command_exception_still_audits_partial_work(self):
+        contract = self.contract(allowed_writes=[])
+
+        def error(argv, cwd, timeout, log, env):
+            log.write_text("Partial command output\n")
+            (self.root / "result.txt").write_text("Preserved after exception")
+            raise RuntimeError("synthetic transport error")
+
+        with patch("pipeline.tasks.run_process", side_effect=error) as command:
+            with self.assertRaisesRegex(RuntimeError, "synthetic transport error"):
+                run_task(contract, execute=True, root=self.root)
+        self.assertEqual(command.call_count, 1)
+        report = load_json(next((self.root / ".studio/runs").glob("*/report.json")))
+        self.assertEqual(report["status"], "write_boundary_violated")
+        self.assertEqual(report["stop_reason"], "error")
+        self.assertTrue(report["reconciliation_required"])
+        self.assertEqual(report["unexpected_writes"], ["result.txt"])
+        self.assertEqual(report["error"], "synthetic transport error")
+        self.assertEqual(report["commands"][0]["reason"], "error")
+        self.assertIn("Partial command", (self.root / report["commands"][0]["log"]).read_text())
+        self.assertEqual((self.root / "result.txt").read_text(), "Preserved after exception")
 
     def test_write_boundary_failure_is_reported_without_deleting_work(self):
         contract = self.contract(allowed_writes=[])

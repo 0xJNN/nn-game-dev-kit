@@ -199,12 +199,14 @@ def run_task(contract: Path, execute=False, root: Path = ROOT) -> dict:
                             reason, exit_code = record.get("reason"), record.get("exit_code")
                             if reason != "completed" or type(exit_code) is not int or exit_code < 0:
                                 if reason == "completed":
-                                    reason = "signal" if type(exit_code) is int and exit_code < 0 else "unknown_exit_code"
+                                    reason = ("signal" if type(exit_code) is int and exit_code < 0
+                                              else "unknown_exit_code")
                                 result.update(
                                     status="outcome_unknown", stop_reason=reason or "unclassified",
                                     reconciliation_required=True,
                                 )
-                                if reason == "deadline" or time.monotonic() - started >= task["limits"]["deadline_seconds"]:
+                                if (reason == "deadline"
+                                        or time.monotonic() - started >= task["limits"]["deadline_seconds"]):
                                     result["status"] = "deadline_exceeded"
                         except (Exception, KeyboardInterrupt) as exc:
                             reason = "interrupted" if isinstance(exc, KeyboardInterrupt) else "error"
