@@ -1,9 +1,35 @@
-# Paladins-inspired starter — Lyra Linux build and editor startup verified
+# Paladins-inspired starter — Lyra played on Linux; original Hero Lab extension
 
 Checked 2026-11-03. Keep the existing NovanodeLab intact; it is not a multiplayer shooter framework.
 Official Lyra **5.8** now builds on Linux with the existing **Unreal 5.8.4** and passes a full
-offline headless editor startup/normal-exit check. Graphical visibility and gameplay are separate
-checks; neither is established by headless startup.
+offline headless editor startup/normal-exit check. The human subsequently confirmed the window
+and successfully played, but reported lag. That report is separate from headless startup and is
+not a performance or multiplayer-correctness approval.
+
+## Original hero sandbox — 2026-11-04
+
+See [HERO_SANDBOX.md](HERO_SANDBOX.md) for the new opt-in plugin, small test map, mage projectile,
+three-hit sword prototype, dash, and the exact verification gaps. Reusable source lives under
+`projects/hero-sandbox/`; free-resource provenance/pins under `resources/hero-sandbox/`. Quaternius
+UAL2 Standard and a CC0 claymore were actually acquired/imported locally, not merely recommended.
+Player animation retargeting, visual/audio review, multiplayer and FPS gates remain separate.
+No existing sample source, descriptor or config was edited for the extension; all 818 baseline
+hashes and the vault were preserved. Use the new audited `manage.py gold`/`editor` commands in that
+document: the earlier launcher intentionally refuses additions outside its original exact inventory.
+
+## Graphical/performance observations — 2026-11-03
+
+Two graphical sessions used the same command and unchanged graphics. Logged initialization changed
+from **1181.842 s** to **14.827 s**, last reported compiled shaders **8,819 → 45**, and last cumulative
+PSO-creation hitch counter **650 → 50**. This is consistent with warmed caches, not an applied graphics
+optimization or a controlled same-scene FPS benchmark. PSO counters do not count distinct stalled
+frames. No FPS/Frame/Game/Draw/GPU capture was available. Both raw sessions are archived separately
+under `.studio/checkpoints/`; comparison:
+`.studio/evidence/lyra-warm-session-comparison-2026-11-03.json`.
+
+Both processes exited 0; only the first had the expected normal-exit marker. Do not transfer the
+controlled headless lifecycle qualification to the second graphical shutdown. Sustained gameplay
+performance, rendering quality and human performance approval remain unverified.
 
 ## Current verification and diagnosis
 
@@ -30,8 +56,9 @@ checks; neither is established by headless startup.
   initialization and an owned readiness marker, normal shutdown, exit **0**, zero logged errors
   or fatals, and unchanged original/repaired source hashes. Required installed scripting plugins
   were enabled only for that command-line session; no persistent project settings changed.
-- Rendering quality, gameplay, networking, packaging, performance, and human approval remain
-  unverified. Graphical process/window observation must be recorded separately from startup.
+- The human later confirmed graphical visibility and gameplay with reported lag. Rendering quality,
+  broad gameplay correctness, networking, packaging, sustained performance, and final human approval
+  remain unverified. Graphical process/window observation is recorded separately from startup.
 
 Evidence:
 
@@ -46,6 +73,10 @@ model context; raw sample source/assets and raw engine diagnostics were not. Loc
 repair does not settle the code-versus-content AI-input license boundary below.
 
 ## Open the repaired local project
+
+**Historical baseline command:** the exact-inventory launcher below remains unchanged and will
+refuse the new hero plugin. For the current extended working copy, use the guarded commands in
+[HERO_SANDBOX.md](HERO_SANDBOX.md), including `manage.py gold` for the original menu/modes.
 
 ```sh
 python3 .studio/launch_lyra.py
