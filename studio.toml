@@ -11,6 +11,21 @@ version = "5.8"
 build_timeout_seconds = 1800
 test_timeout_seconds = 600
 
+# Selection is explicit; studio.project above remains the default. These are not model profiles.
+[profiles.lab]
+label = "NovanodeLab"
+project = "projects/NovanodeLab/NovanodeLab.uproject"
+map = "/Game/Generated/Maps/NovanodeLab"
+experience = ""
+engine_version = "5.8"
+
+[profiles.hero-sandbox]
+label = "Hero Lab / official Lyra"
+project = ".studio/lyra/projects/LyraStarterGame/Lyra.uproject"
+map = "/NovanodeHeroes/Maps/L_HeroSandbox_v2"
+experience = "/NovanodeHeroes/Experiences/B_HeroSandbox_v2"
+engine_version = "5.8.4"
+
 [budgets]
 # Reservations + settled costs count toward this local project's lifetime budget.
 # No paid adapter is enabled. Changing this file is a human approval decision.

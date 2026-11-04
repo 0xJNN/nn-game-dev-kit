@@ -8,7 +8,7 @@ import sqlite3
 import subprocess
 import sys
 
-from . import engines, models, unreal
+from . import engines, models, profiles, unreal
 from .assets import validate_asset
 from .common import ROOT, StudioError, atomic_json, config, load_json, project_path
 from .ledger import Ledger
@@ -19,17 +19,25 @@ from .tools import fetch_tool
 def parser() -> argparse.ArgumentParser:
     cli = argparse.ArgumentParser(description="Novanode Studio: local, bounded production tools")
     commands = cli.add_subparsers(dest="command", required=True)
-    commands.add_parser("doctor", help="Report pinned tool availability; never installs anything")
+    doctor = commands.add_parser("doctor", help="Report availability; --profile selects read-only project metadata")
+    doctor.add_argument("--profile", choices=profiles.IDS)
+    projects = commands.add_parser("projects", help="Read-only project profiles, not model/agent profiles")
+    project_actions = projects.add_subparsers(dest="action", required=True)
+    project_actions.add_parser("list")
+    project_status = project_actions.add_parser("status")
+    project_status.add_argument("--profile", choices=profiles.IDS, help="Default: match studio.project")
     commands.add_parser("test", help="Run the dependency-free Python tests")
     run = commands.add_parser("run", help="Preview/launch the primary Unreal Linux experience")
     run.add_argument("--execute", action="store_true")
+    run.add_argument("--profile", choices=profiles.IDS)
     ue = commands.add_parser("unreal", help="Linux Unreal source, build, and verification gates")
     ue_actions = ue.add_subparsers(dest="action", required=True)
-    ue_actions.add_parser("doctor")
-    ue_actions.add_parser("validate")
+    for name in ("doctor", "validate"):
+        ue_actions.add_parser(name).add_argument("--profile", choices=profiles.IDS)
     for name in ("build", "prepare", "test", "run", "editor", "package", "smoke"):
         operation = ue_actions.add_parser(name)
         operation.add_argument("--execute", action="store_true", help="Execute against your installed UE_ROOT (default: preview)")
+        operation.add_argument("--profile", choices=profiles.IDS)
     model = commands.add_parser("models", help="Research metadata, opt-in profiles, and local serving plans")
     model_actions = model.add_subparsers(dest="action", required=True)
     model_actions.add_parser("list")
@@ -117,8 +125,34 @@ def job_command(args):
         ledger.close()
 
 
+def project_unreal(action: str, execute=False, profile=None):
+    if profile is not None:
+        selected = profiles.resolve(profile)
+        if action == "doctor":
+            return profiles.status(profile)
+        if selected["id"] == "hero-sandbox":
+            if execute:
+                raise StudioError("Hero profile execution is not migrated to studio.py. No engine started; "
+                                  "use the existing reviewed projects/hero-sandbox/manage.py launcher.")
+            return profiles.preview_hero(action)
+        profiles.require_lab_adapter(selected)
+    if action == "doctor":
+        return unreal.doctor()
+    if action == "validate":
+        return unreal.validate_source()
+    result = unreal.run(action, execute)
+    if profile is not None and isinstance(result, dict):
+        result.update(profile=profile, project=str(project_path(selected["project"])),
+                      map=selected["map"], experience=selected["experience"] or None)
+    return result
+
+
 def dispatch(args):
+    if args.command == "projects":
+        return profiles.list_profiles() if args.action == "list" else profiles.status(args.profile)
     if args.command == "doctor":
+        if args.profile is not None:
+            return profiles.status(args.profile)
         tools = {}
         for tool in ("blender",):
             try:
@@ -128,13 +162,9 @@ def dispatch(args):
         return {"python": sys.version.split()[0], "root": str(ROOT), "tools": tools,
                 "unreal": unreal.doctor(), "paid_adapters": "disabled", "macos": "deferred"}
     if args.command == "run":
-        return unreal.run("run", args.execute)
+        return project_unreal("run", args.execute, args.profile)
     if args.command == "unreal":
-        if args.action == "doctor":
-            return unreal.doctor()
-        if args.action == "validate":
-            return unreal.validate_source()
-        return unreal.run(args.action, args.execute)
+        return project_unreal(args.action, getattr(args, "execute", False), args.profile)
     if args.command == "models":
         if args.action == "list":
             return load_json(ROOT / "models.lock.json")

@@ -6,15 +6,17 @@ macOS is deferred. The Godot pilot is preserved as a legacy reference, not the p
 
 ## Current status
 
-**2026-11-03: Unreal 5.8.4 is installed and the lab editor has been launched.** The owner confirmed
+**Historical checkpoint, 2026-11-03:** Unreal 5.8.4 was installed and the lab editor launched. The owner confirmed
 the window is visible. Actual native compilation, owned map/material preparation, all three native
 state tests, and 77 Python/portable C++ tests passed. Real gameplay input, visual/performance quality,
 packaged startup, and model coding quality remain separate unverified gates. This setup reused an
 existing installation; it did not download an engine/model or accept Epic's license.
 
-For a Paladins-inspired hero shooter, see the [starter recommendation](docs/HERO_SHOOTER_STARTER.md):
-use a separate official Lyra project rather than turning the lab into a shooter. Lyra acquisition,
-version compatibility, and license review are still pending; the sample is not installed yet.
+**2026-11-04:** official Lyra 5.8 is installed separately on this workstation, with the opt-in
+`NovanodeHeroes` extension and versioned Hero Lab v2. Prior native build, standalone combat and
+rendered-body probes passed; human visual/controls approval, retargeting, multiplayer, FPS and
+packaging remain separate pending gates. See [Hero Lab usage and evidence](docs/HERO_SANDBOX.md).
+These are historical receipts, not a claim that an old build verifies today's source/engine/content.
 
 ## Start here
 
@@ -24,7 +26,7 @@ the [execution roadmap](docs/EXECUTION_ROADMAP.md). Resume at its first unfinish
 Requires Python **3.11.8+**. A C++ compiler is needed for the portable state test.
 
 On this workstation, `.studio/unreal.env` selects the discovered engine and
-`python3 .studio/launch_unreal.py` opens the lab editor. It is already open at this checkpoint;
+`python3 .studio/launch_unreal.py` opens the lab editor. Check existing ownership before launching;
 do not start another instance. These helpers are ignored, machine-local files. See
 [the exact installation and verification evidence](docs/UNREAL.md) for a fresh checkout.
 
@@ -33,6 +35,29 @@ python3 studio.py doctor
 python3 studio.py task run tasks/unreal-source.json --execute
 python3 studio.py unreal build
 ```
+
+### Explicit project profiles — read-only first
+
+```sh
+python3 studio.py projects list
+python3 studio.py projects status                     # matches studio.project: NovanodeLab
+python3 studio.py projects status --profile hero-sandbox
+python3 studio.py doctor --profile hero-sandbox       # same metadata-only diagnostic
+python3 studio.py run --profile lab                   # existing lab preview
+python3 studio.py run --profile hero-sandbox          # guarded play-v2 wrapper preview, no launch
+```
+
+`studio.project` remains unchanged; project profiles in `studio.toml` are distinct from the
+coding-model profiles below. Status/explicit-profile doctors do not run tools, create `.studio`,
+read engine logs, import local launch helpers or approve native/visual gates. They inspect bounded
+metadata and owned source/module hashes. Missing `UE_ROOT`, engine mismatches, unknown jobs and
+stale/unbound journals are reported without clearing holds or changing configuration.
+
+Hero profile routing is **preview-only** for `run`/`unreal run`/`unreal editor`; `--execute` and other
+native Hero routes are rejected, never redirected to NovanodeLab. Keep using the existing guarded
+`projects/hero-sandbox/manage.py` launcher for authorized native work. Its fixed engine path and
+ignored helper chain have **not** been migrated; a clean checkout can diagnose missing prerequisites,
+not reconstruct/download Lyra automatically. Legacy commands without `--profile` retain their behavior.
 
 Unreal actions **preview by default**. Install the Linux editor through your authorized Epic
 account, review licensing/storage needs, and point `UE_ROOT` at the folder containing `Engine/`.

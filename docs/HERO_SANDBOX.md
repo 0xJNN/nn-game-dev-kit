@@ -3,6 +3,34 @@
 Fuente reproducible: `projects/hero-sandbox/`. Recursos: `resources/hero-sandbox/catalog.json`.
 Trabajamos sobre la copia local de **Lyra 5.8 / Unreal 5.8.4 para Linux**, no sobre NovanodeLab.
 
+## Selección y diagnóstico de solo lectura
+
+```sh
+python3 studio.py projects list
+python3 studio.py projects status --profile hero-sandbox
+python3 studio.py doctor --profile hero-sandbox
+python3 studio.py run --profile hero-sandbox
+```
+
+El último comando **solo muestra** la invocación guardada de `manage.py play-v2`; no inicia Unreal.
+El perfil declara proyecto, mapa v2, experiencia y versión 5.8.4, sin cambiar el predeterminado
+NovanodeLab. `unreal editor --profile hero-sandbox` también es preview. `--execute` y las otras
+operaciones nativas de Hero Lab desde `studio.py` se rechazan; no caen en el adaptador del lab.
+
+El diagnóstico no crea archivos, no importa helpers ni lee logs/assets a contexto de IA. Consulta
+metadatos acotados y hashes locales del plugin propio: distingue motor/descriptor compatibles,
+recursos con revisión/pin/hold de entrada a IA, jobs sin reconciliar y evidencia histórica.
+`historical_unbound` **no es verificación vigente**: los journals anteriores no fijan una identidad
+completa de motor/contenido, aunque coincidan fuentes y binario. `stale` indica diferencias;
+`identity_unavailable` o cobertura incompleta exige revisión, no repetir ni borrar jobs.
+Los gates visuales, red, rendimiento, paquete y aprobación humana siguen separados.
+
+Para diagnosticar el motor, definir `UE_ROOT` a una instalación propia ya autorizada; no se instala
+ni se acepta una licencia. La ausencia de `.studio`/Lyra/helpers produce indicaciones sin descargarlos.
+**Esto no migra el lanzador**: `manage.py` conserva su ruta de motor local y dependencias ignoradas.
+La presencia del helper de entrada no verifica toda esa cadena. Los comandos nativos de abajo
+mantienen sus comprobaciones de ownership, fuentes, assets y jobs; no ejecutarlos por un status positivo.
+
 ## Presentación v2 — revisión del personaje, cámara y textos
 
 El reporte humano confirmó el problema de la primera versión: se veía el wand, pero no el cuerpo;
