@@ -134,10 +134,12 @@ def summarize(log):
 
 
 def run(operation):
+    if operation == "text-capture":
+        raise StudioError("Original-text capture fixture is checkpointed after a crash and disabled pending review; no engine started")
     import lyra_startup as startup
     with resource_lock("integrator", ROOT), resource_lock("unreal-editor", ROOT):
         preserved = baseline()
-        uses_v2 = operation in ("smoke-v2", "probe-v2", "probe-v2-rendered", "editor-v2")
+        uses_v2 = operation in ("smoke-v2", "probe-v2", "probe-v2-rendered", "editor-v2", "play-v2")
         journals = [json.loads(path.read_text()) for path in EVIDENCE.glob("hero-sandbox-job-*.json")]
         reconcile_journal = None
         # Refuse an un-reconciled command, even when its PID no longer exists.
@@ -167,7 +169,7 @@ def run(operation):
                 if len(candidates) != 1:
                     raise StudioError("Read-only reconciliation needs one exact completed preparation artifact identity")
                 reconcile_journal = EVIDENCE / ("hero-sandbox-job-" + candidates[0]["job_id"] + ".json")
-            if operation in ("smoke", "editor", "probe", "smoke-v2", "editor-v2", "probe-v2", "probe-v2-rendered", "text-capture"):
+            if operation in ("smoke", "editor", "probe", "smoke-v2", "editor-v2", "play-v2", "probe-v2", "probe-v2-rendered", "text-capture"):
                 required_map = "Maps/L_TextCalibration_v2.umap" if operation == "text-capture" else (
                     "Maps/L_HeroSandbox_v2.umap" if uses_v2 else "Maps/L_HeroSandbox_v1.umap")
                 verify_prepared_assets(journals, required_map)
@@ -189,8 +191,14 @@ def run(operation):
             if operation in ("prepare", "prepare-v2", "validate-v2"):
                 recipe = "validate_presentation.py" if operation == "validate-v2" else (
                     "prepare_presentation.py" if operation == "prepare-v2" else "prepare_unreal.py")
-                argv += ["-EnablePlugins=PythonScriptPlugin,EditorScriptingUtilities",
-                         "-ExecutePythonScript=" + str(Path(__file__).with_name(recipe))]
+                argv += ["-EnablePlugins=PythonScriptPlugin,EditorScriptingUtilities"]
+                if operation == "validate-v2":
+                    # Documented headless asset-commandlet lifecycle: do not initialize
+                    # unrelated full-editor UI helpers for a read-only package check.
+                    # Still require this fresh run to have zero errors and normal exit.
+                    argv += ["-run=pythonscript", "-script=" + str(Path(__file__).with_name(recipe))]
+                else:
+                    argv += ["-ExecutePythonScript=" + str(Path(__file__).with_name(recipe))]
             elif operation == "test":
                 argv += ["-ExecCmds=Automation RunTests Novanode.Heroes;Quit", "-TestExit=Automation Test Queue Empty",
                          "-ReportExportPath=" + str(folder / "automation")]
@@ -216,6 +224,15 @@ def run(operation):
                     raise StudioError("Insufficient confirmed capture VRAM; do not stop user services")
                 argv.remove("-NullRHI")
                 argv.insert(2, TEXT_MAP)
+                # Original-text fixture, not a Lyra gameplay readiness test.
+                # Keep its base GameMode with matching base instance/player/viewport
+                # so the sample's front-end/loading flow cannot cover the test.
+                index = next(i for i, value in enumerate(argv) if value.startswith("-ini:Engine:"))
+                argv[index] += "," + ",".join((
+                    "[/Script/EngineSettings.GameMapsSettings]:GameInstanceClass=/Script/Engine.GameInstance",
+                    "[/Script/Engine.Engine]:LocalPlayerClassName=/Script/Engine.LocalPlayer",
+                    "[/Script/Engine.Engine]:GameViewportClientClassName=/Script/Engine.GameViewportClient",
+                ))
                 argv += ["-game", "-DisablePython", "-RenderOffscreen", "-ForceRes", "-ResX=1280", "-ResY=720",
                          "-ExecCmds=t.MaxFPS 60", "-HeroTextCapture=" + str(folder / "text.png")]
             else:
@@ -227,7 +244,9 @@ def run(operation):
                     raise StudioError("Insufficient confirmed VRAM; do not stop user services")
                 argv[0] = str(ENGINE / "Engine/Binaries/Linux/UnrealEditor")
                 argv = [a for a in argv if a not in ("-unattended", "-NullRHI", "-nosound")]
-                if operation in ("editor", "editor-v2"): argv.insert(2, MAP_V2 if uses_v2 else MAP_V1)
+                if operation in ("editor", "editor-v2", "play-v2"): argv.insert(2, MAP_V2 if uses_v2 else MAP_V1)
+                if operation == "play-v2":
+                    argv += ["-game", "-DisablePython", "-windowed", "-ResX=1280", "-ResY=720"]
         state = {"state": "reserved", "job_id": job_id, "operation": operation, "started_at": utc_now(),
                  "command": argv, "source_sha256": hashes, "preservation": preserved,
                  "raw_logs_local_only": [str(console.relative_to(ROOT)), str(log.relative_to(ROOT))],
@@ -296,7 +315,7 @@ def run(operation):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("build", "prepare", "prepare-v2", "validate-v2", "test", "smoke", "smoke-v2", "probe", "probe-v2", "probe-v2-rendered", "text-capture", "editor", "editor-v2", "gold"))
+    parser.add_argument("operation", choices=("build", "prepare", "prepare-v2", "validate-v2", "test", "smoke", "smoke-v2", "probe", "probe-v2", "probe-v2-rendered", "text-capture", "editor", "editor-v2", "play-v2", "gold"))
     try:
         raise SystemExit(run(parser.parse_args().operation))
     except (StudioError, OSError, ValueError, KeyError) as exc:

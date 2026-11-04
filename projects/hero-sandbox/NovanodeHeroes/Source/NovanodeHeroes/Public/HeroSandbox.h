@@ -43,6 +43,7 @@ class NOVANODEHEROES_API AHeroFacingTextActor : public ATextRenderActor
     GENERATED_BODY()
 public:
     AHeroFacingTextActor();
+    virtual void BeginPlay() override;
     virtual void Tick(float Delta) override;
     UFUNCTION(BlueprintCallable) void FaceEntry(FVector Viewer);
 };
@@ -61,6 +62,9 @@ private:
     void FinishCapture();
     double StartedAt = 0.;
     bool bRequested = false;
+    bool bCameraPrepared = false;
+    int32 CalibrationDefaultPawnVisualsRemoved = 0;
+    int32 CalibrationCameraVisualsRemoved = 0;
     FDelegateHandle ScreenshotHandle;
 };
 

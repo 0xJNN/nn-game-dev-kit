@@ -3,16 +3,21 @@
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "Camera/PlayerCameraManager.h"
+#include "Camera/CameraActor.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Dom/JsonObject.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/DefaultPawn.h"
 #include "GameFeatureAction_AddComponents.h"
 #include "HAL/PlatformMisc.h"
 #include "HAL/PlatformTime.h"
@@ -145,6 +150,12 @@ AHeroFacingTextActor::AHeroFacingTextActor()
     PrimaryActorTick.TickInterval = .1f;
 }
 void AHeroFacingTextActor::FaceEntry(FVector Viewer) { UHeroSandboxEditorTools::FaceOwnedText(GetTextRender(), Viewer); }
+void AHeroFacingTextActor::BeginPlay()
+{
+    Super::BeginPlay();
+    if (GetTextRender()->Text.ToString() == TEXT("PRESS PLAY | experience loads automatically"))
+        GetTextRender()->SetText(FText::FromString(TEXT("PLAY SESSION | J ATTACK  K DASH | 1 MAGE  2 SWORD")));
+}
 void AHeroFacingTextActor::Tick(float Delta)
 {
     Super::Tick(Delta);
@@ -170,20 +181,59 @@ void AHeroTextCalibrationActor::Tick(float Delta)
         return;
     }
     if (bRequested || Elapsed < 4.) return;
-    bool bAllowed = GetWorld()->GetOutermost()->GetName() == TEXT("/NovanodeHeroes/Maps/L_TextCalibration_v2");
-    int32 Texts = 0;
+    bool bAllowed = GetWorld()->GetOutermost()->GetName() == TEXT("/NovanodeHeroes/Maps/L_TextCalibration_v2") &&
+        GetGameInstance() && GetGameInstance()->GetClass() == UGameInstance::StaticClass();
+    if (bAllowed && !bCameraPrepared)
+    {
+        APlayerController* Player = UGameplayStatics::GetPlayerController(this, 0);
+        TArray<ACameraActor*> Cameras;
+        for (TActorIterator<ACameraActor> It(GetWorld()); It; ++It) Cameras.Add(*It);
+        if (Player && Cameras.Num() == 1)
+        {
+            // GameModeBase otherwise creates an unrelated engine default-pawn
+            // sphere. This original-text fixture is camera-only, not gameplay.
+            // Remove ONLY their visual component in this owned test world,
+            // retaining possession so no spectator/respawn camera is created.
+            for (TActorIterator<ADefaultPawn> It(GetWorld()); It; ++It)
+                if (It->GetClass() == ADefaultPawn::StaticClass())
+                {
+                    TInlineComponentArray<UStaticMeshComponent*> Visuals(*It);
+                    for (UStaticMeshComponent* Visual : Visuals) Visual->DestroyComponent();
+                    ++CalibrationDefaultPawnVisualsRemoved;
+                }
+            // Camera actors in an editor build also own a hidden editor camera
+            // mesh. It is not part of this two-text fixture. Remove only hidden
+            // or editor-only ENGINE helper geometry, not arbitrary scene assets.
+            TInlineComponentArray<UStaticMeshComponent*> CameraVisuals(Cameras[0]);
+            for (UStaticMeshComponent* Visual : CameraVisuals)
+                if ((Visual->IsEditorOnly() || Visual->bHiddenInGame) && Visual->GetStaticMesh() &&
+                    Visual->GetStaticMesh()->GetPathName().StartsWith(TEXT("/Engine/")))
+                {
+                    Visual->DestroyComponent();
+                    ++CalibrationCameraVisualsRemoved;
+                }
+            Player->SetViewTarget(Cameras[0]);
+            bCameraPrepared = true;
+            return; // Let component removal reach the renderer before capture.
+        }
+    }
+    bAllowed = bAllowed && bCameraPrepared;
+    int32 Texts = 0, ForeignSkeletal = 0, ForeignStatic = 0, ForeignMaterials = 0, ForeignFonts = 0;
     for (TActorIterator<AActor> It(GetWorld()); It; ++It)
     {
         TInlineComponentArray<USkeletalMeshComponent*> Skeletal(*It);
-        for (const USkeletalMeshComponent* Mesh : Skeletal) if (Mesh->GetSkeletalMeshAsset()) bAllowed = false;
+        for (const USkeletalMeshComponent* Mesh : Skeletal)
+            if (Mesh->GetSkeletalMeshAsset()) { bAllowed = false; ++ForeignSkeletal; }
         TInlineComponentArray<UStaticMeshComponent*> Static(*It);
         for (const UStaticMeshComponent* Mesh : Static)
         {
-            if (Mesh->GetStaticMesh() && !Mesh->GetStaticMesh()->GetPathName().StartsWith(TEXT("/Engine/BasicShapes/"))) bAllowed = false;
+            if (Mesh->GetStaticMesh() && !Mesh->GetStaticMesh()->GetPathName().StartsWith(TEXT("/Engine/BasicShapes/")))
+                { bAllowed = false; ++ForeignStatic; }
             for (int32 Index = 0; Index < Mesh->GetNumMaterials(); ++Index)
                 if (const UMaterialInterface* Material = Mesh->GetMaterial(Index))
                     if (!Material->GetPathName().StartsWith(TEXT("/Engine/")) &&
-                        !Material->GetPathName().StartsWith(TEXT("/NovanodeHeroes/PresentationV2/"))) bAllowed = false;
+                        !Material->GetPathName().StartsWith(TEXT("/NovanodeHeroes/PresentationV2/")))
+                        { bAllowed = false; ++ForeignMaterials; }
         }
         TInlineComponentArray<UTextRenderComponent*> Components(*It);
         Texts += Components.Num();
@@ -191,7 +241,7 @@ void AHeroTextCalibrationActor::Tick(float Delta)
         {
             FObjectPropertyBase* FontProperty = FindFProperty<FObjectPropertyBase>(Text->GetClass(), TEXT("Font"));
             UObject* Font = FontProperty ? FontProperty->GetObjectPropertyValue_InContainer(Text) : nullptr;
-            if (!Font || !Font->GetPathName().StartsWith(TEXT("/Engine/"))) bAllowed = false;
+            if (!Font || !Font->GetPathName().StartsWith(TEXT("/Engine/"))) { bAllowed = false; ++ForeignFonts; }
         }
     }
     if (!bAllowed || Texts != 2)
@@ -199,10 +249,19 @@ void AHeroTextCalibrationActor::Tick(float Delta)
         TSharedRef<FJsonObject> Report = MakeShared<FJsonObject>();
         Report->SetStringField(TEXT("state"), TEXT("capture_refused_foreign_visuals_or_wrong_scene"));
         Report->SetNumberField(TEXT("text_components"), Texts);
+        Report->SetNumberField(TEXT("foreign_skeletal_meshes"), ForeignSkeletal);
+        Report->SetNumberField(TEXT("foreign_static_meshes"), ForeignStatic);
+        Report->SetNumberField(TEXT("foreign_materials"), ForeignMaterials);
+        Report->SetNumberField(TEXT("foreign_fonts"), ForeignFonts);
+        Report->SetBoolField(TEXT("camera_prepared"), bCameraPrepared);
+        Report->SetNumberField(TEXT("calibration_default_pawn_visuals_removed"), CalibrationDefaultPawnVisualsRemoved);
+        Report->SetNumberField(TEXT("calibration_camera_visuals_removed"), CalibrationCameraVisualsRemoved);
         WriteReport(Report, Output + TEXT(".json"));
         FPlatformMisc::RequestExit(false);
         return;
     }
+    // Do not save a black loading-screen frame and call it a text verification.
+    if (!GEngine || !GEngine->GameViewport || GEngine->GameViewport->bDisableWorldRendering) return;
     bRequested = true;
     ScreenshotHandle = FScreenshotRequest::OnScreenshotRequestProcessed().AddUObject(this, &AHeroTextCalibrationActor::FinishCapture);
     FScreenshotRequest::RequestScreenshot(Output, false, false);
@@ -215,6 +274,8 @@ void AHeroTextCalibrationActor::FinishCapture()
     const bool bSaved = IFileManager::Get().FileSize(*Output) > 0;
     Report->SetStringField(TEXT("state"), bSaved ? TEXT("original_text_calibration_captured") : TEXT("capture_missing_unknown"));
     Report->SetBoolField(TEXT("foreign_visuals_excluded"), true);
+    Report->SetNumberField(TEXT("calibration_default_pawn_visuals_removed"), CalibrationDefaultPawnVisualsRemoved);
+    Report->SetNumberField(TEXT("calibration_camera_visuals_removed"), CalibrationCameraVisualsRemoved);
     Report->SetBoolField(TEXT("visual_verified"), false);
     WriteReport(Report, Output + TEXT(".json"));
     FPlatformMisc::RequestExit(false);

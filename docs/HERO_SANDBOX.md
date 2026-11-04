@@ -3,6 +3,67 @@
 Fuente reproducible: `projects/hero-sandbox/`. Recursos: `resources/hero-sandbox/catalog.json`.
 Trabajamos sobre la copia local de **Lyra 5.8 / Unreal 5.8.4 para Linux**, no sobre NovanodeLab.
 
+## Presentación v2 — revisión del personaje, cámara y textos
+
+El reporte humano confirmó el problema de la primera versión: se veía el wand, pero no el cuerpo;
+los textos estaban invertidos y el mapa parecía estructura gris. La inspección nativa separó las causas:
+
+- **No era necesario esperar más shaders para que apareciera el cuerpo.** El pawn estaba poseído,
+  GAS funcionaba y la cámara ya estaba en tercera persona, a **298,6 cm**. Sin embargo, faltaba el
+  componente de apariencia del controlador: solo quedaba una malla auxiliar de **4 vértices**.
+- Nuestra experiencia v1 había reutilizado PawnData, pero omitido la acción que ensambla las partes
+  cosméticas de Lyra. La v2 referencia **solo esa acción de componentes**, no los bots, temporizadores,
+  marcador, UI o entrega de armas del modo original.
+- La prueba v2 `probe-v2-d6d9a48936f4` confirmó un cuerpo adjunto, visible según los flags del motor,
+  con animación vinculada: **48.783 vértices entre cuerpo y proxy**, en vez de cuatro. La cámara se
+  conserva; no se construyó otro sistema de cámara ni se sustituyó el movimiento de Lyra.
+- Todos nuestros textos v1 tenían un giro fijo de 180°. En la v2 se usa la cara legible de TextRender
+  y un giro horizontal hacia el observador, conservando el eje vertical y sin escalas negativas.
+  La comprobación visual aislada de texto se registra aparte; no equivale a aprobar el arte del héroe.
+- El gris era un **blockout intencional sin materiales propios**, no una demostración de que el motor
+  no renderizase. La v2 asigna seis materiales originales sencillos, acentos por zona, iluminación y
+  previews CC0 visibles antes de Play. Sigue siendo un laboratorio, no un lobby/escenario terminado.
+
+Mapa nuevo: **`/NovanodeHeroes/Maps/L_HeroSandbox_v2`**. Los **60 archivos de Content preexistentes**
+(incluidos mapas v1 e imports) se conservan byte a byte. En el editor, las figuras de exposición son
+previews; el jugador poseído se crea al pulsar **Play**. No hay que entrar a un portal: este mapa
+selecciona directamente su propia experiencia de Lyra al comenzar la partida.
+
+```sh
+python3 projects/hero-sandbox/manage.py play-v2
+```
+
+Ese comando entra **directamente al juego**, sin quedarse en el viewport del editor ni en el lobby.
+Para editar el mapa, cerrar primero esa ventana y usar:
+
+```sh
+python3 projects/hero-sandbox/manage.py editor-v2
+```
+
+Las comprobaciones reproducibles de la v2 son `probe-v2`, `probe-v2-rendered` y `smoke-v2`.
+El probe con GPU no envía imágenes del sample a IA: solo devuelve métricas estructurales. La captura
+aislada de texto no pasó: primero rechazó geometría auxiliar, después produjo una imagen negra
+que fue inspeccionada, y una variante de aislamiento terminó con SIGSEGV. **`text-capture` está
+deshabilitado y sus evidencias preservadas; no se reintenta ni cuenta como aprobación visual.**
+La orientación de texto tiene regresiones matemáticas, pero requiere confirmación humana in-game.
+La calidad visual del personaje, agarre,
+retargeting de ataques, multijugador y FPS siguen siendo gates independientes.
+
+La pasada actual `probe-v2-rendered-805ab8e5066b` confirmó un cuerpo animado, adjunto y recientemente
+renderizado en GPU, con la cámara a 298,6 cm: **salida normal y cero errores/fatals**. La regresión
+de combate `smoke-v2-a68186da6d4b` también pasó con **100 → 75 → 55 → 35 → 5**, sin daño duplicado
+por swing y con desplazamiento, igualmente con salida normal y cero errores/fatals. Ninguna prueba
+es un benchmark de FPS ni una revisión artística. El fallo del fixture aislado no se ocultó ni se
+transfirió a la calificación de esas ejecuciones independientes del mapa real.
+
+La receta `prepare_presentation.py` crea assets versionados **una sola vez**; no se debe repetir para
+sobrescribirlos. Su validación de paquetes se hace en modo commandlet de solo lectura, conservando
+los intentos previos bloqueados. La creación y la validación en editor completo registraron un error
+de `AIAssistant`; no se ignoró ni atribuyó al cuerpo. La validación posterior
+`validate-v2-ed6ca3133eab` pasó con **salida normal y cero errores/fatals**, sin alterar paquetes.
+
+Los apartados siguientes documentan la base y las evidencias históricas de la v1.
+
 ## Qué construimos
 
 - Plugin **NovanodeHeroes**, sin editar el núcleo, mapas originales, configuración o descriptor de Lyra.

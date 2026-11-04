@@ -112,6 +112,10 @@ int main() {
         self.assertIn("validate_owned_cosmetic_assembly_action(cls)", code)
         self.assertNotIn("unreal.GameFeatureAction_AddComponents", code)
 
+    def test_failed_capture_fixture_cannot_be_blindly_restarted(self):
+        with self.assertRaisesRegex(StudioError, "checkpointed after a crash"):
+            self.manager.run("text-capture")
+
     def test_cosmetics_adapter_is_narrow_and_does_not_copy_match_action_sets(self):
         path = ROOT / "projects/hero-sandbox/NovanodeHeroes/Source/NovanodeHeroes/Private/HeroPresentation.cpp"
         code = path.read_text()
@@ -125,7 +129,7 @@ int main() {
         path = ROOT / "projects/hero-sandbox/NovanodeHeroes/Source/NovanodeHeroes/Private/HeroPresentation.cpp"
         code = path.read_text()
         self.assertIn('TEXT("/NovanodeHeroes/Maps/L_TextCalibration_v2")', code)
-        self.assertIn("if (Mesh->GetSkeletalMeshAsset()) bAllowed = false", code)
+        self.assertIn("if (Mesh->GetSkeletalMeshAsset()) { bAllowed = false; ++ForeignSkeletal; }", code)
         self.assertIn('StartsWith(TEXT("/Engine/BasicShapes/"))', code)
         self.assertLess(code.index("if (!bAllowed || Texts != 2)"), code.index("FScreenshotRequest::RequestScreenshot"))
 
