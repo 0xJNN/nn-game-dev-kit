@@ -53,8 +53,16 @@ copy the full implementation transcript into another agent. Reviewer ≠ human a
 - The runner stops at deadline, command timeout, attempt limit, write-boundary violation, or
   completion. It never refills an empty queue or starts another polish cycle.
 - Evidence records individual commands, exit codes, bounded logs, attempts, and final status.
-- Retries repeat the full deterministic package. Commands must be idempotent. Unknown paid
-  jobs require reconciliation, not retrying the task.
+- Only a completed command with a known, nonnegative exit code can lead to a retry; a nonzero
+  code repeats the full deterministic package within its attempts/deadline. Commands must be idempotent.
+- Timeout, log-limit, signal termination, interruption, or an unclassified result stops execution
+  without another step/attempt. The report preserves the command/log identity, `stop_reason`, write
+  audit, and `reconciliation_required: true`; its status is `outcome_unknown` (or `deadline_exceeded`,
+  `interrupted`, or `write_boundary_violated` when applicable). A zero exit code alone is not success.
+  If the deadline expires before a command starts, it is not launched and there is no new unknown job.
+- Before running again, a human must inspect the run journal and partial outputs, reconcile any
+  external job/charge, and explicitly authorize a safe next execution. There is no automatic resume
+  or cross-run resubmission guard yet; rerunning the CLI is not reconciliation. Preserve old evidence.
 
 ## 5. Release gate
 

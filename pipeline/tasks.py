@@ -150,6 +150,7 @@ def run_task(contract: Path, execute=False, root: Path = ROOT) -> dict:
     result = {
         "run_id": run_id, "task_id": task["id"], "started_at": utc_now(),
         "status": "running", "human_approval": "pending", "commands": [],
+        "reconciliation_required": False,
         "budget_scope": "ledger reservations only; arbitrary subprocess billing is not observable",
     }
     report = evidence / "report.json"
@@ -174,24 +175,51 @@ def run_task(contract: Path, execute=False, root: Path = ROOT) -> dict:
                 for phase in ("steps", "verification"):
                     for step in task[phase]:
                         remaining = task["limits"]["deadline_seconds"] - (time.monotonic() - started)
+                        if remaining <= 0:
+                            result.update(status="deadline_exceeded", stop_reason="deadline")
+                            return result
                         argv = list(step["argv"])
                         for index, arg in enumerate(argv):
                             for token, value in substitutions.items():
                                 arg = arg.replace(token, value)
                             argv[index] = arg
-                        record = {"attempt": attempt, "phase": phase, "name": step["name"], "argv": argv}
+                        log = evidence / f"command-{len(result['commands']) + 1:02}.log"
+                        record = {
+                            "attempt": attempt, "phase": phase, "name": step["name"], "argv": argv,
+                            "log": str(log), "reason": "running", "exit_code": None,
+                        }
                         result["commands"].append(record)
                         atomic_json(report, result)
-                        record.update(run_process(
-                            argv, root, min(remaining, task["limits"]["command_timeout_seconds"]),
-                            evidence / f"command-{len(result['commands']):02}.log", env,
-                        ))
-                        unexpected = unexpected_writes(baseline, snapshot(root), task["allowed_writes"])
-                        if unexpected:
-                            result.update(status="write_boundary_violated", unexpected_writes=unexpected)
+                        command_started = time.monotonic()
+                        try:
+                            record.update(run_process(
+                                argv, root, min(remaining, task["limits"]["command_timeout_seconds"]),
+                                log, env,
+                            ))
+                            reason, exit_code = record.get("reason"), record.get("exit_code")
+                            if reason != "completed" or type(exit_code) is not int or exit_code < 0:
+                                if reason == "completed":
+                                    reason = "signal" if type(exit_code) is int and exit_code < 0 else "unknown_exit_code"
+                                result.update(
+                                    status="outcome_unknown", stop_reason=reason or "unclassified",
+                                    reconciliation_required=True,
+                                )
+                                if reason == "deadline" or time.monotonic() - started >= task["limits"]["deadline_seconds"]:
+                                    result["status"] = "deadline_exceeded"
+                        except (Exception, KeyboardInterrupt) as exc:
+                            reason = "interrupted" if isinstance(exc, KeyboardInterrupt) else "error"
+                            record.update(reason=reason, seconds=round(time.monotonic() - command_started, 3))
+                            result.update(stop_reason=reason, reconciliation_required=True)
+                            raise
+                        finally:
+                            # Partial and interrupted work must be audited too; never erase it.
+                            unexpected = unexpected_writes(baseline, snapshot(root), task["allowed_writes"])
+                            if unexpected:
+                                result.update(status="write_boundary_violated", unexpected_writes=unexpected)
+                            atomic_json(report, result)
+                        if unexpected or result["reconciliation_required"]:
                             return result
-                        atomic_json(report, result)
-                        if record["exit_code"] != 0 or record["reason"] != "completed":
+                        if record["exit_code"] != 0:
                             passed = False
                             break
                     if not passed:
@@ -200,15 +228,19 @@ def run_task(contract: Path, execute=False, root: Path = ROOT) -> dict:
                     result["status"] = "machine_verified"
                     break
                 if time.monotonic() - started >= task["limits"]["deadline_seconds"]:
-                    result["status"] = "deadline_exceeded"
+                    result.update(status="deadline_exceeded", stop_reason="deadline")
                     break
             else:
                 result["status"] = "attempts_exhausted"
     except KeyboardInterrupt:
-        result["status"] = "interrupted"
+        if result["status"] != "write_boundary_violated":
+            result["status"] = "interrupted"
+        result.update(stop_reason="interrupted", reconciliation_required=True)
         raise
     except Exception as exc:
-        result.update(status="error", error=str(exc))
+        if result["status"] != "write_boundary_violated":
+            result["status"] = "error"
+        result["error"] = str(exc)
         raise
     finally:
         result["finished_at"] = utc_now()
