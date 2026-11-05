@@ -102,7 +102,7 @@ bool UHeroTrainingSubsystem::IsTrainingWorld() const
     const UWorld* World = GetWorld();
     return bEnabled && World && World->GetNetMode() == NM_Standalone &&
         World->GetOutermost()->GetName() == TrainingMap &&
-        World->URL.GetOption(TEXT("Experience="), TEXT("")) == FString(TEXT("B_HeroTraining_v3"));
+        FString(World->URL.GetOption(TEXT("Experience="), TEXT(""))) == TEXT("B_HeroTraining_v3");
 }
 
 void UHeroTrainingSubsystem::Tick(float)

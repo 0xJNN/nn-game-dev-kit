@@ -117,6 +117,30 @@ def verify_prepared_assets(journals, required_map="Maps/L_HeroSandbox_v1.umap"):
                 data.get("state") == "prepared" and data.get("generated_sha256") == current and
                 required_map in current):
             return row["job_id"]
+    # A v3 promotion is additive, never a replacement baseline: preserve every
+    # byte of the exact earlier preparation and restrict all additions to v3.
+    for row in journals:
+        data = row.get("preparation", {})
+        if (row.get("operation") != "validate-v3" or row.get("state") != "completed" or
+                type(row.get("exit_code")) is not int or row["exit_code"] != 0 or
+                data.get("state") != "prepared" or data.get("generated_sha256") != current or
+                data.get("pre_existing_content_unchanged") is not True or required_map not in current or
+                row.get("summary", {}).get("error_severity_count") != 0 or
+                row.get("summary", {}).get("fatal_count") != 0 or
+                row.get("summary", {}).get("normal_exit_marker") is not True):
+            continue
+        base = data.get("pre_existing_sha256", {})
+        parents = [old for old in journals if old.get("job_id") == data.get("baseline_job_id") and
+                   old.get("operation") in ("prepare", "prepare-v2", "validate-v2") and
+                   type(old.get("exit_code")) is int and old["exit_code"] == 0 and
+                   old.get("summary", {}).get("fatal_count") == 0 and
+                   old.get("summary", {}).get("error_severity_count") == 0 and
+                   old.get("summary", {}).get("normal_exit_marker") is True and
+                   old.get("state") == "completed" and old.get("preparation", {}).get("state") == "prepared" and
+                   old.get("preparation", {}).get("generated_sha256") == base]
+        if (len(parents) == 1 and base and all(current.get(name) == value for name, value in base.items()) and
+                set(current) - set(base) and all(name.startswith("TrainingV3/") for name in set(current) - set(base))):
+            return row["job_id"]
     raise StudioError("Own map/imported assets changed or no complete preparation exists; preserve and review")
 
 

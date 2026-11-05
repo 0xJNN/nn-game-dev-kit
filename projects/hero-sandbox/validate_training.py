@@ -27,6 +27,11 @@ def main():
         assert isinstance(data, unreal.HeroTrainingData), "training_data_missing"
         target = data.get_editor_property("target_mesh")
         assert target, "target_mesh_missing"
+        assert len(data.get_editor_property("sword_montages")) == 3, "sword_combo_montage_count_differ"
+        assert data.get_editor_property("cast_montage") and data.get_editor_property("dash_montage"), "skill_montage_missing"
+        assert data.get_editor_property("sword_equipment") and data.get_editor_property("mage_equipment"), "equipment_missing"
+        assert str(data.get_editor_property("attack_slot")) != "None", "attack_slot_missing"
+        assert 80.0 <= data.get_editor_property("sword_length_cm") <= 160.0, "weapon_scale_outside_bounds"
         montage_count = 0
         for key in CLIPS:
             montage = lib.load_asset(PREFIX + "/Montages/AM_HeroTraining_" + key + "_v3")

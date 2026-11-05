@@ -3,6 +3,64 @@
 Fuente reproducible: `projects/hero-sandbox/`. Recursos: `resources/hero-sandbox/catalog.json`.
 Trabajamos sobre la copia local de **Lyra 5.8 / Unreal 5.8.4 para Linux**, no sobre NovanodeLab.
 
+## Hero Training v3 — integración local en curso
+
+Objetivo: **Lobby → Hero Training → elegir Melee o Mage → tres bots rivales → volver al lobby**.
+La compatibilidad de clases Lyra/IK y los imports existentes ya pasó en un commandlet de solo lectura
+con salida normal y cero errores. Eso no verifica todavía este recorrido de gameplay ni su calidad visual.
+
+La implementación nueva vive en `HeroTraining*`, `hero_training.py`, `prepare_training.py` y
+`validate_training.py`. Es **opt-in mediante `-HeroTrainingV3` y solo standalone**: no sustituye los
+mapas v1/v2 ni el frontend/modos originales. Añade una pantalla CommonUI sobre el frontend existente,
+selección explícita de héroe, una experiencia derivada localmente de los sistemas de Lyra y acciones
+propias para equipo, input y equipos rivales. El daño usa `LyraDamageExecution` y el HealthSet nativo,
+no el HealthSet de los muñecos v1/v2. El equipo nativo concede y retira las habilidades.
+
+**Estado: fuente implementada; compilación, preparación, recorrido real y revisión humana tienen
+gates separados.** Consultar los receipts nuevos antes de considerar v3 ejecutable. Ningún comando
+se inicia automáticamente ni se debe repetir una preparación parcial/fallida.
+
+Los comandos son preview salvo `--execute`:
+
+```sh
+python3 projects/hero-sandbox/hero_training.py build
+python3 projects/hero-sandbox/hero_training.py prepare-v3
+python3 projects/hero-sandbox/hero_training.py validate-v3
+python3 projects/hero-sandbox/hero_training.py play-v3
+```
+
+`build --execute`, `prepare-v3 --execute` y `validate-v3 --execute` son operaciones nativas separadas,
+con ownership, identidades exactas, logs locales y un intento por fase. `play-v3 --execute` **abre una
+ventana** y exige previamente build/assets coincidentes; no se ejecuta como parte de la preparación.
+Su arranque es el frontend, no el laboratorio v2. El stop de v3 es independiente:
+
+```sh
+python3 projects/hero-sandbox/hero_training.py stop --dry-run
+python3 projects/hero-sandbox/hero_training.py stop --execute --timeout 20
+```
+
+Solo selecciona jobs `play-v3-<12 hex>`, verifica también el supervisor y `-HeroTrainingV3`, usa pidfd
+y una única SIGINT, y no reescribe el journal nativo. No detiene v2, editor, builds ni servicios.
+Un resultado desconocido exige reconciliación; no se reenvía una señal a ciegas. El cierre de un
+Unreal real sigue sin estar calificado por estos fixtures.
+
+Controles **implementados, pendientes de probar en el recorrido real**: WASD/ratón de Lyra;
+LMB o J para atacar; Q o K para dash de espada; Tab/Esc para el menú de entrenamiento. El HUD propio
+muestra salud, cooldowns y número de bots rivales. El menú de pausa permite reanudar o volver al lobby.
+
+La receta crea solo `Content/TrainingV3/`: cinco clips retargeteados al esqueleto del pawn, cinco
+montages, equipo/AbilitySet, configuración de tres bots y experiencia. Los montages de espada usan
+los ataques A/B/C y dash adquiridos. **El mago usa provisionalmente `OverhandThrow` como gesto de
+lanzamiento**, no un recurso mágico dedicado; el staff sigue siendo un placeholder. La claymore
+importada mide aproximadamente 659 cm antes de escalarse y se normaliza a 120 cm; el hueso de agarre
+y la compatibilidad de esqueletos se comprueban, pero alineación, clipping y apariencia necesitan
+revisión visual. No se afirma que los shaders/materiales estén resueltos por encontrar los assets.
+
+La promoción de Content exige un padre verificado, hash idéntico de **cada** asset anterior y
+adiciones solo bajo `TrainingV3/`. Una validación v3 completa puede conservar la elegibilidad de los
+mapas v1/v2; no cambia sus bytes ni aprueba su arte. Los checks de paquetes no prueban clicks,
+input, IA real, daño, muerte/respawn ni retorno al lobby. Red, FPS y packaging quedan fuera de esta etapa.
+
 ## Selección y diagnóstico de solo lectura
 
 ```sh
