@@ -68,6 +68,37 @@ Para editar el mapa, cerrar primero esa ventana y usar:
 python3 projects/hero-sandbox/manage.py editor-v2
 ```
 
+### Cerrar la partida gestionada
+
+Desde otra terminal, mientras `play-v2` mantiene su lanzador abierto:
+
+```sh
+python3 projects/hero-sandbox/manage.py stop
+```
+
+Solicita un cierre al **proceso del juego**, no un Ctrl+C al lanzador. Verifica PID/start ticks,
+usuario, ejecutable, argumentos/proyecto/mapa, arranque y supervisor. Usa un `pidfd` de Linux
+para enviar una única `SIGINT` a ese proceso con handler instalado; no usa `pkill`, señales de
+grupo, SIGKILL ni escalado automático. El lanzador original conserva la responsabilidad de
+guardar el código de salida real. `stop` nunca reescribe el journal de la partida ni aprueba su calidad.
+
+```sh
+python3 projects/hero-sandbox/manage.py stop --dry-run
+python3 projects/hero-sandbox/manage.py stop --timeout 30
+python3 projects/hero-sandbox/manage.py stop --job-id play-v2-XXXXXXXXXXXX
+```
+
+`--job-id` es el ID exacto del journal (12 dígitos hexadecimales, no las X del ejemplo).
+El timeout permitido es 1–60 s, 20 s por defecto. Sin partida pendiente, no hace nada. Si hay
+varias, exige selección explícita; no detiene `editor-v2`, builds, pruebas ni otros proyectos.
+No requiere los helpers ignorados ni toma los locks del editor que la partida mantiene ocupados.
+
+Un timeout, PID ausente/reutilizado, supervisor perdido o journal sin salida confirmada conserva
+el resultado **desconocido**. Cada solicitud efectiva deja un receipt `hero-sandbox-stop-*.json`;
+si quedó sin resolver, no se envía otra señal automáticamente. Revisar/reconciliar, no borrar el
+journal ni repetir a ciegas. Puede cerrarse normalmente la ventana si falta soporte pidfd/handler.
+El transporte se prueba con fixtures propios; el cierre de Unreal real requiere comprobación humana.
+
 Las comprobaciones reproducibles de la v2 son `probe-v2`, `probe-v2-rendered` y `smoke-v2`.
 El probe con GPU no envía imágenes del sample a IA: solo devuelve métricas estructurales. La captura
 aislada de texto no pasó: primero rechazó geometría auxiliar, después produjo una imagen negra

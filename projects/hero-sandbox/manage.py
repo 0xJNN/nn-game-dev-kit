@@ -133,7 +133,13 @@ def summarize(log):
             "owned_diagnostics": own[:24]}
 
 
-def run(operation):
+def run(operation, *, job_id=None, timeout=20, dry_run=False):
+    if operation == "stop":
+        from pipeline.hero_stop import stop_session
+        result = stop_session(ROOT, ENGINE / "Engine/Binaries/Linux/UnrealEditor", WORK / "Lyra.uproject",
+                              MAP_V2, job_id=job_id, timeout=timeout, dry_run=dry_run)
+        print(json.dumps(result, indent=2))
+        return 0 if result["state"] in ("stopped", "not_running", "dry_run") else 1
     if operation == "text-capture":
         raise StudioError("Original-text capture fixture is checkpointed after a crash and disabled pending review; no engine started")
     import lyra_startup as startup
@@ -263,8 +269,7 @@ def run(operation):
             atomic_json(journal, state)
             print(json.dumps({"job": str(journal.relative_to(ROOT)), "pid": process.pid, "operation": operation}), flush=True)
             code = process.wait()
-        state.update(state="completed" if code == 0 else "blocked", exit_code=code, finished_at=utc_now(),
-                     preservation=baseline(), summary=summarize(console if operation == "build" else log))
+        record_exit(state, journal, code, console if operation == "build" else log)
         if operation == "build" and code == 0:
             module = STAGE / "Binaries/Linux/libUnrealEditor-NovanodeHeroes.so"
             state["native_module_sha256"] = digest(module)
@@ -313,11 +318,36 @@ def run(operation):
         return 0 if state["state"] == "completed" else 1
 
 
+def record_exit(state, journal, code, log):
+    """Persist the real child exit before a post-check can fail or be interrupted."""
+    state.update(exit_code=code, finished_at=utc_now(), process_exit_observed=True)
+    atomic_json(journal, state)
+    try:
+        preservation = baseline()
+        summary = summarize(log)
+    except (Exception, KeyboardInterrupt):
+        state.update(state="blocked", post_exit_verification="failed_or_interrupted")
+        atomic_json(journal, state)
+        raise
+    state.update(state="completed" if code == 0 else "blocked", preservation=preservation, summary=summary)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("build", "prepare", "prepare-v2", "validate-v2", "test", "smoke", "smoke-v2", "probe", "probe-v2", "probe-v2-rendered", "text-capture", "editor", "editor-v2", "play-v2", "gold"))
+    parser.add_argument("operation", choices=("build", "prepare", "prepare-v2", "validate-v2", "test", "smoke", "smoke-v2", "probe", "probe-v2", "probe-v2-rendered", "text-capture", "editor", "editor-v2", "play-v2", "gold", "stop"))
+    parser.add_argument("--job-id", help="stop only: exact play-v2 job when selection is ambiguous")
+    parser.add_argument("--timeout", type=int, help="stop only: wait 1..60 seconds (default 20); never escalates")
+    parser.add_argument("--dry-run", action="store_true", help="stop only: validate identity without sending a signal")
+    args = parser.parse_args()
+    if args.operation != "stop" and (args.job_id is not None or args.timeout is not None or args.dry_run):
+        parser.error("--job-id, --timeout and --dry-run are stop-only options")
     try:
-        raise SystemExit(run(parser.parse_args().operation))
+        raise SystemExit(run(args.operation, job_id=args.job_id, timeout=20 if args.timeout is None else args.timeout,
+                             dry_run=args.dry_run))
+    except KeyboardInterrupt:
+        print(json.dumps({"state": "outcome_unknown", "reconciliation_required": True,
+                          "error": "Interrupted: inspect the native journal and stop receipt; no blind retry"}))
+        raise SystemExit(130)
     except (StudioError, OSError, ValueError, KeyError) as exc:
         print(json.dumps({"state": "stopped_preserve_and_review", "error": str(exc)}))
         raise SystemExit(1)

@@ -59,6 +59,16 @@ native Hero routes are rejected, never redirected to NovanodeLab. Keep using the
 ignored helper chain have **not** been migrated; a clean checkout can diagnose missing prerequisites,
 not reconstruct/download Lyra automatically. Legacy commands without `--profile` retain their behavior.
 
+Para cerrar una partida gestionada de Hero Lab, desde **otra terminal**:
+
+```sh
+python3 projects/hero-sandbox/manage.py stop
+```
+
+Solo solicita el cierre del `play-v2` identificado, espera su salida y el registro del lanzador;
+no cierra editores, no fuerza procesos ni borra journals. Ver opciones y límites en
+[Hero Lab](docs/HERO_SANDBOX.md#cerrar-la-partida-gestionada).
+
 Unreal actions **preview by default**. Install the Linux editor through your authorized Epic
 account, review licensing/storage needs, and point `UE_ROOT` at the folder containing `Engine/`.
 The prepared project targets the **5.8 version family**; another version needs an explicit review.
