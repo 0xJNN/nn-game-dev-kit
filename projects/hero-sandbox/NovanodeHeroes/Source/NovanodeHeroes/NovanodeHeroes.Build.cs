@@ -7,7 +7,9 @@ public class NovanodeHeroes : ModuleRules
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
         PublicDependencyModuleNames.AddRange(new[] {
             "Core", "CoreUObject", "Engine", "InputCore", "GameplayAbilities",
-            "GameplayTags", "GameplayTasks", "NetCore", "Json", "GameFeatures"
+            "GameplayTags", "GameplayTasks", "NetCore", "Json", "GameFeatures",
+            "LyraGame", "EnhancedInput", "UMG", "CommonUI", "CommonGame", "AIModule", "AssetRegistry"
         });
+        PrivateDependencyModuleNames.AddRange(new[] { "Slate", "SlateCore" });
     }
 }

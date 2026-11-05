@@ -11,6 +11,9 @@
   "Modules": [{"Name": "NovanodeHeroes", "Type": "Runtime", "LoadingPhase": "Default"}],
   "Plugins": [
     {"Name": "GameplayAbilities", "Enabled": true},
-    {"Name": "GameFeatures", "Enabled": true}
+    {"Name": "GameFeatures", "Enabled": true},
+    {"Name": "EnhancedInput", "Enabled": true},
+    {"Name": "CommonUI", "Enabled": true},
+    {"Name": "CommonGame", "Enabled": true}
   ]
 }
