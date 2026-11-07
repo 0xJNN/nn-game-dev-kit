@@ -30,6 +30,10 @@ def parser() -> argparse.ArgumentParser:
     run = commands.add_parser("run", help="Preview/launch the primary Unreal Linux experience")
     run.add_argument("--execute", action="store_true")
     run.add_argument("--profile", choices=profiles.IDS)
+    hero = commands.add_parser("hero", help="Native Hero Training lobby (separate from legacy pilots)")
+    hero_actions = hero.add_subparsers(dest="action", required=True)
+    play = hero_actions.add_parser("play", help="Preview the manual lobby launch; --execute opens the game")
+    play.add_argument("--execute", action="store_true", help="Open a graphical Offline game; close its window to exit")
     ue = commands.add_parser("unreal", help="Linux Unreal source, build, and verification gates")
     ue_actions = ue.add_subparsers(dest="action", required=True)
     for name in ("doctor", "validate"):
@@ -148,6 +152,9 @@ def project_unreal(action: str, execute=False, profile=None):
 
 
 def dispatch(args):
+    if args.command == "hero":
+        from .hero_play import play
+        return play(args.execute)
     if args.command == "projects":
         return profiles.list_profiles() if args.action == "list" else profiles.status(args.profile)
     if args.command == "doctor":

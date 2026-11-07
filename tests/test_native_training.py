@@ -333,6 +333,79 @@ int main() {
         with self.assertRaises(training.StudioError):
             training.probe_deferral_source_updates(old, {name: "new"})
 
+    def test_registered_team_policy_and_strict_loop_evidence_actual_cpp(self):
+        source = self.folder / "teams.cpp"
+        source.write_text(r'''
+#include "TrainingFlow.h"
+#include <cassert>
+int main() {
+    using namespace NovanodeTraining;
+    const int registered[] = {1, 2};
+    assert(SelectRivalTeam(registered, 2, 0) == -1); // original invalid UI index
+    assert(SelectRivalTeam(registered, 2, 1) == 2);
+    assert(SelectRivalTeam(registered, 2, 2) == 1);
+    const int duplicates[] = {1, 1};
+    const int noTeam[] = {1, 255};
+    assert(SelectRivalTeam(duplicates, 2, 1) == -1);
+    assert(SelectRivalTeam(noTeam, 2, 1) == -1);
+    assert(SelectRivalTeam(registered, 1, 1) == -1);
+    assert(SelectRivalTeam(nullptr, 2, 1) == -1);
+    MatchEvidence good;
+    good.HumanReady = true; good.TotalBots = good.OwnedBots = good.ReadyBots = good.RivalBots = 3;
+    good.MatchComponents = 1; good.HumanTeam = 1; good.RivalTeam = 2;
+    assert(good.Valid());
+    auto wrong = good; wrong.TotalBots = 4; assert(!wrong.Valid());
+    wrong = good; wrong.RivalTeam = 1; assert(!wrong.Valid());
+    wrong = good; wrong.MatchComponents = 2; assert(!wrong.Valid());
+    LoopEvidence loop;
+    loop.Matches[0] = loop.Matches[1] = good;
+    loop.ReadyMatches = 2; loop.LobbyArrivals = 3; loop.NativeReturns = 2;
+    assert(!loop.Complete()); // readiness alone does not verify teardown
+    loop.Cleanups = 2; assert(loop.Complete());
+    loop.CleanupValid = false; assert(!loop.Complete());
+}
+''')
+        binary = self.folder / "teams"
+        subprocess.run(["g++", "-std=c++17", "-Wall", "-Wextra", "-Werror", "-I", str(PUBLIC), str(source), "-o", str(binary)],
+                       check=True, capture_output=True, timeout=20)
+        subprocess.run([str(binary)], check=True, timeout=5)
+
+    def test_team_assignment_preserves_native_human_and_uses_registered_ids(self):
+        source = (PRIVATE / "TrainingMatchComponent.cpp").read_text()
+        self.assertNotIn("SetGenericTeamId(FGenericTeamId(0))", source)
+        self.assertNotIn("SetGenericTeamId(FGenericTeamId(1))", source)
+        self.assertIn("Teams->GetTeamIDs()", source)
+        self.assertIn("NovanodeTraining::SelectRivalTeam", source)
+        self.assertIn("SetGenericTeamId(FGenericTeamId(RivalTeam))", source)
+
+    def test_preinitialization_diagnostics_and_lifetime_checks_precede_native_call(self):
+        source = (PRIVATE / "TrainingMatchComponent.cpp").read_text()
+        before, after = source.split("Mode->GenericPlayerInitialization(Bot);", 1)
+        self.assertIn('InitializationDiagnostic(TEXT("pre_generic")', before)
+        self.assertIn("!AssignedTeamsValid", before)
+        self.assertIn("Mode->IsActorBeingDestroyed()", before)
+        self.assertIn("Bot->GetWorld() != Mode->GetWorld()", before)
+        self.assertIn('InitializationDiagnostic(TEXT("post_generic")', after)
+
+    def test_runtime_receipt_rejects_progress_wrong_counts_and_incomplete_cleanup(self):
+        match = dict(total_bots=3, owned_bots=3, ready_bots=3, rival_bots=3, match_components=1,
+                     human_team=1, rival_team=2, human_ready=True)
+        good = dict(passed=True, ready_matches=2, generation=2, lobby_arrivals=3, native_returns=2,
+                    cleanups=2, cleanup_valid=True, matches=[match, dict(match)])
+        self.assertTrue(training.verified_loop_result(good))
+        for change in ({"passed": False}, {"cleanups": 1}, {"native_returns": 1}, {"cleanup_valid": False},
+                       {"matches": [match]}, {"matches": [match, {**match, "total_bots": 4}]},
+                       {"matches": [match, {**match, "rival_team": 1}]}):
+            self.assertFalse(training.verified_loop_result({**good, **change}))
+
+    def test_team_fix_installed_sync_scope_rejects_asset_and_unrelated_edits(self):
+        paths = ("Private/TrainingMatchComponent.cpp", "Private/TrainingLobby.cpp", "Public/TrainingLobby.h", "Public/TrainingFlow.h")
+        before = {"Source/NovanodeTraining/" + p: "old" for p in paths}
+        after = {k: "new" for k in before}
+        self.assertEqual(training.team_loop_source_updates(before, after), set(before))
+        with self.assertRaises(training.StudioError):
+            training.team_loop_source_updates(before, {**after, "Content/new.uasset": "foreign"})
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

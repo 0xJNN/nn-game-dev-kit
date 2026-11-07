@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / ".studio/scripts"))
 from pipeline.common import StudioError, atomic_json, load_json, resource_lock, utc_now
 
-TASK = "hero-native-lobby-probe-deferral-2026-11-07"
+TASK = "hero-native-team-loop-fix-2026-11-07"
 SOURCE = Path(__file__).with_name("NovanodeTraining")
 WORK = ROOT / ".studio/lyra/projects/LyraStarterGame"
 STAGE = WORK / "Plugins/GameFeatures/NovanodeTraining"
@@ -82,7 +82,7 @@ def prior_guard():
             raise StudioError("Prior native job changed: " + name)
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT).decode().strip()
     index = hashlib.sha256(subprocess.check_output(["git", "ls-files", "--stage"], cwd=ROOT)).hexdigest()
-    repository_checkpoint = load_json(EVIDENCE / "hero-native-lobby-staging-checkpoint-2026-11-07.json")
+    repository_checkpoint = load_json(EVIDENCE / "hero-native-team-loop-checkpoint-2026-11-07.json")
     for name, expected in repository_checkpoint["prior_native_journals_sha256"].items():
         if digest(ROOT / name) != expected:
             raise StudioError("Checkpointed failed/native journal changed: " + name)
@@ -165,13 +165,13 @@ def compile_correction_updates(previous, authored):
 
 
 def sync_compile_correction(receipt):
-    checkpoint = load_json(EVIDENCE / "hero-native-lobby-probe-checkpoint-2026-11-07.json")
+    checkpoint = load_json(EVIDENCE / "hero-native-team-loop-checkpoint-2026-11-07.json")
     previous = checkpoint["installed_source_sha256"]
     authored = manifest(SOURCE)
     expected_installed = {**previous, **{"Content/" + k: v for k, v in checkpoint["content_sha256"].items()}}
     if receipt["sha256"] != previous or manifest(STAGE) != expected_installed:
         raise StudioError("Stopped installed source changed; preserve it before correction")
-    changed = probe_deferral_source_updates(previous, authored)
+    changed = team_loop_source_updates(previous, authored)
     if digest(EVIDENCE / ("hero-native-lobby-job-" + checkpoint["verify_job"] + ".json")) != checkpoint["verify_journal_sha256"]:
         raise StudioError("Original failed native journal changed; preserve and review")
     archive = ROOT / checkpoint["source_archive"] / "install-before-correction.json"
@@ -236,6 +236,40 @@ def probe_deferral_source_updates(previous, authored):
     if set(previous) != set(authored) or changed != allowed:
         raise StudioError("Correction is not exactly the measured opt-in probe deferral")
     return changed
+
+
+def team_loop_source_updates(previous, authored):
+    allowed = {"Source/NovanodeTraining/Private/TrainingMatchComponent.cpp",
+               "Source/NovanodeTraining/Private/TrainingLobby.cpp",
+               "Source/NovanodeTraining/Public/TrainingLobby.h",
+               "Source/NovanodeTraining/Public/TrainingFlow.h"}
+    changed = {name for name in previous.keys() | authored.keys() if previous.get(name) != authored.get(name)}
+    if set(previous) != set(authored) or changed != allowed:
+        raise StudioError("Correction is not exactly the diagnosed native team policy and loop evidence")
+    return changed
+
+
+def verified_loop_result(result):
+    if not (result.get("passed") is True and result.get("ready_matches") == 2 and result.get("generation") == 2 and
+            result.get("lobby_arrivals") == 3 and result.get("native_returns") == 2 and
+            result.get("cleanups") == 2 and result.get("cleanup_valid") is True):
+        return False
+    matches = result.get("matches")
+    if not isinstance(matches, list) or len(matches) != 2:
+        return False
+    for match in matches:
+        if not isinstance(match, dict) or match.get("human_ready") is not True:
+            return False
+        if any(match.get(name) != 3 for name in ("total_bots", "owned_bots", "ready_bots", "rival_bots")):
+            return False
+        if match.get("match_components") != 1:
+            return False
+        human, rival = match.get("human_team"), match.get("rival_team")
+        if (not isinstance(human, (int, float)) or isinstance(human, bool) or
+                not isinstance(rival, (int, float)) or isinstance(rival, bool) or
+                not 0 <= human < 255 or not 0 <= rival < 255 or human == rival):
+            return False
+    return True
 
 
 def validate_mapid_migration(before, after):
@@ -344,7 +378,7 @@ def require_phase(operation, source, content):
         if digest(parent) != checkpoint["asset_parent_journal_sha256"]:
             raise StudioError("Successful asset parent journal changed; preserve and review")
     if operation == "validate-assets":
-        checkpoint = load_json(EVIDENCE / "hero-native-lobby-probe-checkpoint-2026-11-07.json")
+        checkpoint = load_json(EVIDENCE / "hero-native-team-loop-checkpoint-2026-11-07.json")
         if content != checkpoint["content_sha256"]:
             raise StudioError("Previously repaired asset manifest differs; no reprepare allowed")
         parent = EVIDENCE / ("hero-native-lobby-job-" + checkpoint["asset_parent_job_id"] + ".json")
@@ -382,7 +416,8 @@ def command(operation, folder):
               "-unattended", "-NullRHI", "-nosound", "-AbsLog=" + str(folder / "engine.log")]
     if operation == "verify":
         result.insert(2, LOBBY)
-        result += ["-game", "-DisablePython", "-NovanodeTrainingProbe=" + str(folder / "result.json")]
+        result += ["-game", "-DisablePython", "-NovanodeTrainingProbe=" + str(folder / "result.json"),
+                   "-NovanodeTrainingDiagnostics=" + str(folder / "initialization.jsonl")]
     else:
         if operation in ("schema", "prepare", "repair-map-id"):
             result += ["-DPCVars=GameFeaturePlugin.SkipBuiltInGameFeatures=1"]
@@ -408,7 +443,7 @@ def run(operation):
         if operation == "prepare" and content:
             raise StudioError("Owned Content already exists; never overwrite a partial preparation")
         require_phase(operation, source, content)
-        if operation != "build":
+        if operation in ("build", "schema", "validate-assets", "verify"):
             gpu = subprocess.run(["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
                                  capture_output=True, text=True, timeout=10, check=True)
             if int(gpu.stdout.splitlines()[0]) < 2048:
@@ -465,9 +500,7 @@ def run(operation):
             else:
                 good = good and row["summary"]["fatal_count"] == row["summary"]["error_count"] == 0 and row["summary"]["normal_shutdown"]
                 expected = {"schema": "schema_verified", "prepare": "prepared", "repair-map-id": "assets_repaired", "validate-assets": "assets_loaded"}.get(operation)
-                good = good and (row["result"].get("state") == expected if expected else
-                                 row["result"].get("passed") is True and row["result"].get("ready_matches") == 2 and
-                                 row["result"].get("generation") == 2)
+                good = good and (row["result"].get("state") == expected if expected else verified_loop_result(row["result"]))
             if operation == "repair-map-id":
                 validate_mapid_migration(content, row["content_after"])
             elif operation != "prepare" and row["content_after"] != content:

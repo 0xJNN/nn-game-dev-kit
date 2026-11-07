@@ -3,21 +3,93 @@
 Fuente reproducible: `projects/hero-sandbox/`. Recursos: `resources/hero-sandbox/catalog.json`.
 Trabajamos sobre la copia local de **Lyra 5.8 / Unreal 5.8.4 para Linux**, no sobre NovanodeLab.
 
-## Hero Training nativo — implementación separada, gates pendientes
+## Jugar manualmente — comando corto
 
-**Checkpoint 2026-11-07: integración bloqueada, no presentar como lobby jugable verificado.**
-La compilación nativa exacta, el adaptador reflejado, su regresión de GC forzado y la creación de
-13 assets propios pasaron. El ID real del mapa usa el nombre completo del paquete; se migró
-únicamente `MapID` en la definición propia, conservando todos los demás hashes. La validación
-nativa posterior de los assets contra el binario actual también pasó sin errores.
+**Estado actual: integración original de Lyra implementada en fuente y compilada, pero NO lista
+para presentar como recorrido verificado.** El último schema nativo de la pantalla de hosting
+rechazó la forma esperada de su propiedad Offline (`native_host_offline_schema=false`). Se detuvo
+antes de otra partida: no se debe repetir el contrato agotado ni dar por corregidos mouse/lag.
+Handoff vigente: `.studio/builds/hero-native-original/handoff.md`.
+Los comandos siguientes describen la nueva entrada, no una aprobación de gameplay o visual.
 
-El probe Offline sí cargó el lobby y el mapa propios, pero los últimos intentos terminaron con
-**SIGSEGV en la inicialización de bots**. No hay dos partidas verificadas ni prueba de combate,
-respawn, botones/input reales o limpieza completa de regreso. La deferral de acciones automáticas
-del probe no resolvió ese fallo. Los intentos y sus salidas observadas se conservan; no repetir
-contratos agotados ni borrar/recrear los assets. Evidencia/handoff local:
-`.studio/builds/hero-native-lobby/handoff.md`. No se abrió ninguna ventana ni se otorgó aprobación
-visual/feel. Se requiere una nueva tarea acotada para diagnosticar la inicialización nativa de bots.
+Abre una **terminal de Linux en tu escritorio gráfico** (no la consola de Unreal).
+Primero entra a la raíz del repositorio:
+
+```sh
+cd /home/d/Desktop/proyects/nn-proyects/novanode-studio
+```
+
+Desde esa carpeta, abre el lobby con:
+
+```sh
+python3 studio.py hero play --execute
+```
+
+No necesitas recordar ni copiar los argumentos largos: `pipeline/hero_play.py` compone el
+comando, las rutas absolutas y las opciones Offline/retorno al lobby para esta invocación.
+La ruta nueva inicia en el **frontend original de Lyra**, con `Hero Training` como una experiencia
+adicional en **Play Lyra**. No usa `L_TrainingLobby` como entrada ni reemplaza el menú original.
+El launcher solicita **borderless fullscreen** (`r.FullScreenMode=1`), sin forzar 1280×720.
+No compila, no prepara assets y no cambia archivos de configuración. Cierra normalmente
+cualquier sesión anterior de Unreal/Lyra antes de lanzarlo; el launcher comprueba que no haya
+otro editor ni trabajos pendientes y que haya al menos 4096 MiB de VRAM libres. No detiene servicios.
+
+Para **ver el comando sin abrir ninguna ventana**, desde la misma carpeta:
+
+```sh
+python3 studio.py hero play
+```
+
+Recorrido nuevo esperado: **Play Lyra → Host → Offline → Hero Training → selector Melee/Mage**.
+`Host` abre la pantalla nativa de creación de partida; allí elige **Offline** antes de seleccionar
+la experiencia **Hero Training**. Abrir esa pantalla no inicia todavía la partida.
+El selector usa botones de Lyra y pausa el mundo standalone mientras eliges; confirmar continúa
+la partida ya alojada, no crea otra sesión. Luego usa el **menú de pausa original de Lyra** para
+regresar al frontend original y repetir. Los modos originales permanecen disponibles en la misma lista.
+Los clics, borderless, presentación y rendimiento siguen pendientes de revisión humana: no se
+atribuye el lag a shaders ni se promete corregirlo sin mediciones de frame time.
+
+La integración configura en memoria la definición propia ya registrada (título y límite de un
+jugador local). **No guarda ni migra ninguno de los 13 assets**. Las fuentes y el probe nuevo están
+en `projects/hero-sandbox/native_frontend.py` y su tarea `hero-native-original-frontend-2026-11-07`.
+Consultar sus recibos `.studio/evidence/hero-native-original-job-*.json` y el handoff antes de
+considerar verificada esta ruta: el checkpoint anterior de dos partidas corresponde al lobby propio.
+
+Para terminar, **cierra la ventana del juego normalmente**. La terminal permanece ocupada
+hasta su salida y guarda el resultado en `.studio/evidence/hero-native-manual-job-play-*.json`;
+los logs quedan en `.studio/builds/hero-native-manual/play-*/`. No cierres la terminal ni uses
+Ctrl+C como procedimiento normal: una espera interrumpida conserva un resultado desconocido
+y bloquea otro lanzamiento hasta revisar el recibo. No uses los comandos históricos v2/v3
+ni el runner de verificación para esta prueba manual.
+
+**Límites actuales:** Melee/Mage aún usan PawnData de shooter; sus items/combate específicos
+y un perfil de bots **Easy** no están integrados. Este comando no los añade ni cambia la IA.
+
+## Checkpoint anterior — lobby propio headless, preservado
+
+**Checkpoint 2026-11-07: `machine_verified` para el recorrido nativo headless Offline.**
+`verify-f869628fa61b` completó lobby → selección Melee → partida con **tres rivales** → retorno
+nativo → selección Mage → segunda partida con **tres rivales** → segundo retorno al lobby.
+Salida real **0**, cierre normal y **cero errores/fatals**. Cada partida registró un único componente
+de match; ambas limpiezas retiraron bots, delegado de pawn-ready y binding propio de input.
+Compilación exacta, schema/GC forzado y validación nativa posterior también pasaron. **227 pruebas**.
+
+La causa medida del crash anterior era una aserción de equipos en Lyra: el código propio forzaba
+al humano al ID `0`, fuera del conjunto registrado `[1, 2]`. Ahora conserva el equipo nativo del
+humano y elige un rival registrado distinto; los diagnósticos previos/posteriores a las seis llamadas
+de inicialización comprobaron game mode, controller, PlayerState, autoridad, mundo y vida válidos.
+No fue necesario modificar ninguno de los **13 assets existentes**. Se evaluó el componente nativo
+de creación de bots, pero no se cambió la arquitectura de spawning durante esta corrección aislada.
+
+Los fallos históricos y el intento de debugger cerrado **por autorización humana** como
+`closed_unverified` siguen preservados; ese cierre no es éxito nativo ni tiene un exit code inventado.
+Evidencia actual: `.studio/evidence/hero-native-team-loop-complete-2026-11-07.json`.
+Handoff: `.studio/builds/hero-native-team-loop/handoff.md`.
+
+**Esto no verifica combate, respawn, botones/input reales, imagen ni feel.** Las dos selecciones
+siguen usando PawnData de shooter; la evolución Melee/Mage con Equipment/AbilitySets/animación y
+el PDF preservado es la fase siguiente, con contrato propio. No se abrió ninguna ventana ni se
+otorgó aprobación visual/humana.
 
 La ruta vigente vive en `projects/hero-sandbox/NovanodeTraining/`, un **Game Feature separado**.
 Usa un frontend propio con `MainScreenClass`, selección CommonUI, definición
@@ -39,11 +111,13 @@ combate va después del recorrido nativo. No se inicia ninguna ventana automáti
 # Preview únicamente; --execute exige el contrato acotado vigente y sus prerrequisitos.
 python3 projects/hero-sandbox/native_training.py build
 python3 projects/hero-sandbox/native_training.py schema
-python3 projects/hero-sandbox/native_training.py prepare
+python3 projects/hero-sandbox/native_training.py validate-assets
 python3 projects/hero-sandbox/native_training.py verify
 ```
 
 Los manifests fijan archivos exactos por plugin y conservan fuentes/binarios/journals anteriores.
+Los 13 assets ya existen: **no ejecutar `prepare` ni reutilizar contratos agotados**. Las operaciones
+anteriores son previews; una nueva ejecución nativa exige otro contrato acotado y source-exacto.
 Un timeout es desconocido, no fallo; no se reintenta ni se retira un hold automáticamente.
 
 ## Hero Training v3 — archivo supersedido, no ejecutar

@@ -6,6 +6,7 @@
 
 class UCommonSession_HostSessionRequest;
 class UGameFeatureAction_AddComponents;
+class UCommonButtonBase;
 
 // Deliberately narrow: no arbitrary field writes, function dispatch or package saves.
 UCLASS()
@@ -24,6 +25,14 @@ public:
 
     UFUNCTION(BlueprintCallable, Category="Novanode|Training")
     static FString RepairOwnedMapId();
+
+    UFUNCTION(BlueprintCallable, Category="Novanode|Training")
+    static FString InspectNativeFrontend();
+
+    static UObject* ConfigureNativeFrontendDefinition();
+    static bool SetNativeButtonLabel(UCommonButtonBase* Button, const FText& Label);
+    // Probe-only: restricted to the three exact original frontend callback names.
+    static bool InvokeNativeFrontendCallback(UObject* Widget, int32 Callback, UObject* Argument);
 
     static bool HasComponentEntrySchema();
     static bool HasHostingSignature(UObject* Definition);

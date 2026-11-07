@@ -8,7 +8,7 @@
 #include "CommonUIExtensions.h"
 #include "CommonUserTypes.h"
 #include "Components/Border.h"
-#include "Components/Button.h"
+#include "CommonButtonBase.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
@@ -22,6 +22,9 @@
 #include "Misc/Parse.h"
 #include "NativeGameplayTags.h"
 #include "TimerManager.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonSerializer.h"
+#include "UObject/UObjectIterator.h"
 
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_TrainingMenu, "UI.Layer.Menu");
 
@@ -37,6 +40,12 @@ void UTrainingLobbySubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
     Collection.InitializeDependency<UCommonSessionSubsystem>();
+    bNativeFrontend = FParse::Param(FCommandLine::Get(), TEXT("NovanodeNativeFrontend"));
+    if (bNativeFrontend)
+    {
+        NativeDefinition = UTrainingReflectionAdapter::ConfigureNativeFrontendDefinition();
+        if (!NativeDefinition) UE_LOG(LogTemp, Error, TEXT("NovanodeTraining native experience metadata schema failed"));
+    }
     FParse::Value(FCommandLine::Get(), TEXT("NovanodeTrainingProbe="), ProbePath);
     if (!ProbePath.IsEmpty())
         ProbeWorldHandle = FWorldDelegates::OnPostWorldInitialization.AddUObject(this, &ThisClass::ProbeWorldInitialized);
@@ -48,10 +57,17 @@ void UTrainingLobbySubsystem::ProbeWorldInitialized(UWorld* World, const UWorld:
     FTimerHandle Deadline;
     World->GetTimerManager().SetTimer(Deadline, FTimerDelegate::CreateWeakLambda(this,
         [this]() { WriteProbe(false, TEXT("lifecycle_deadline")); }), 120.f, false);
+    if (bNativeFrontend)
+    {
+        FTimerHandle Driver;
+        World->GetTimerManager().SetTimer(Driver, FTimerDelegate::CreateWeakLambda(this,
+            [this]() { NativeProbeStep(); }), .1f, true);
+    }
 }
 
 void UTrainingLobbySubsystem::Deinitialize()
 {
+    ReleaseNativeSelectionPause();
     SetMenuBlocking(false);
     FWorldDelegates::OnPostWorldInitialization.Remove(ProbeWorldHandle);
     if (auto* Sessions = GetGameInstance()->GetSubsystem<UCommonSessionSubsystem>())
@@ -73,6 +89,13 @@ void UTrainingLobbySubsystem::LobbyActivated()
     // Opt-in unattended driver calls the same UI/session operations, never direct travel.
     if (!ProbePath.IsEmpty())
     {
+        ++ProbeEvidence.LobbyArrivals;
+        if (ProbeMatches == 2)
+        {
+            GetWorld()->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this,
+                [this]() { WriteProbe(ProbeEvidence.Complete(), TEXT("two_matches_and_cleanup_verified")); }));
+            return;
+        }
         if (!OpenSelection() || !Choose(ProbeMatches != 0) || !Host()) WriteProbe(false, TEXT("host_rejected"));
     }
 }
@@ -86,7 +109,9 @@ bool UTrainingLobbySubsystem::OpenSelection()
 
 bool UTrainingLobbySubsystem::Choose(bool Mage)
 {
-    if (!Flow.Choose(Mage ? NovanodeTraining::Hero::Mage : NovanodeTraining::Hero::Melee)) return false;
+    const auto Hero = Mage ? NovanodeTraining::Hero::Mage : NovanodeTraining::Hero::Melee;
+    if (bNativeChoosing) Flow.Selected = Hero;
+    else if (!Flow.Choose(Hero)) return false;
     Status = Mage ? TEXT("Mage selected. Combat/animation evolution is a separate gate.") :
         TEXT("Melee selected. Combat/animation evolution is a separate gate.");
     Refresh();
@@ -95,6 +120,14 @@ bool UTrainingLobbySubsystem::Choose(bool Mage)
 
 bool UTrainingLobbySubsystem::Host()
 {
+    if (bNativeChoosing)
+    {
+        if (Flow.State != NovanodeTraining::Screen::Match || Flow.Selected == NovanodeTraining::Hero::None) return false;
+        bNativeChoosing = false;
+        ReleaseNativeSelectionPause();
+        SetMenuBlocking(false);
+        return true; // Native CommonSession already hosted this experience; never host twice.
+    }
     if (!GetWorld() || GetWorld()->GetNetMode() != NM_Standalone ||
         Flow.State != NovanodeTraining::Screen::Selection || Flow.Selected == NovanodeTraining::Hero::None) return false;
     auto* Sessions = GetGameInstance()->GetSubsystem<UCommonSessionSubsystem>();
@@ -130,30 +163,64 @@ void UTrainingLobbySubsystem::HostComplete(const FOnlineResultInformation& Resul
     }
 }
 
-void UTrainingLobbySubsystem::MatchReady(bool HumanReady, int32 RivalBots)
+void UTrainingLobbySubsystem::MatchReady(const NovanodeTraining::MatchEvidence& Evidence)
 {
-    if (!Flow.MatchReady(HumanReady, RivalBots)) return;
+    if (!Evidence.Valid() || !Flow.MatchReady(Evidence.HumanReady, Evidence.RivalBots)) return;
+    if (bNativeFrontend)
+    {
+        bNativeChoosing = true;
+        if (ProbePath.IsEmpty())
+        {
+            if (!GetWorld()->IsPaused())
+                if (auto* Player = GetGameInstance()->GetFirstLocalPlayerController())
+                    if (Player->SetPause(true)) NativePausedWorld = GetWorld();
+            UClass* Widget = LoadClass<UTrainingScreen>(nullptr, TEXT("/NovanodeTraining/UI/W_HeroSelection.W_HeroSelection_C"));
+            NativeSelection = Cast<UTrainingScreen>(UCommonUIExtensions::PushContentToLayer_ForPlayer(
+                GetGameInstance()->GetFirstGamePlayer(), TAG_TrainingMenu, Widget));
+            if (!NativeSelection.IsValid()) UE_LOG(LogTemp, Error, TEXT("NovanodeTraining native hero selection failed"));
+            return;
+        }
+        if (!Choose(ProbeMatches != 0) || !Host()) { WriteProbe(false, TEXT("native_hero_selection_rejected")); return; }
+    }
     SetMenuBlocking(false);
     Status = TEXT("Local training ready — 3 rivals. Esc: menu. Visual/feel approval pending.");
     Refresh();
     if (!ProbePath.IsEmpty())
     {
+        if (ProbeMatches >= 2) { WriteProbe(false, TEXT("duplicate_ready_match")); return; }
+        ProbeEvidence.Matches[ProbeMatches] = Evidence;
         ++ProbeMatches;
+        ProbeEvidence.ReadyMatches = ProbeMatches;
         const FString Progress = FString::Printf(TEXT("{\"passed\":false,\"reason\":\"match_ready_pending_next_frame\",\"ready_matches\":%d,\"generation\":%u,\"visual_verified\":false}"),
             ProbeMatches, Flow.MatchGeneration);
         FFileHelper::SaveStringToFile(Progress, *ProbePath);
         // Pawn-ready may run inside experience/bot construction. Never tear down that world on its stack.
         GetWorld()->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
         {
-            if (ProbeMatches == 1) ReturnToLobby();
-            else WriteProbe(true, TEXT("two_matches_ready"));
+            ReturnToLobby();
         }));
     }
+}
+
+void UTrainingLobbySubsystem::MatchEnded(bool Clean)
+{
+    if (bNativeFrontend)
+    {
+        ReleaseNativeSelectionPause();
+        bNativeChoosing = false;
+        if (NativeSelection.IsValid()) NativeSelection->DeactivateWidget();
+        NativeSelection.Reset();
+        Flow.Return();
+    }
+    if (ProbePath.IsEmpty()) return;
+    ++ProbeEvidence.Cleanups;
+    ProbeEvidence.CleanupValid &= Clean;
 }
 
 void UTrainingLobbySubsystem::ReturnToLobby()
 {
     if (!Flow.Return()) return;
+    if (!ProbePath.IsEmpty()) ++ProbeEvidence.NativeReturns;
     Resume();
     SetMenuBlocking(false);
     if (auto* Sessions = GetGameInstance()->GetSubsystem<UCommonSessionSubsystem>())
@@ -206,8 +273,42 @@ void UTrainingLobbySubsystem::Refresh() { OnChanged.Broadcast(); }
 
 void UTrainingLobbySubsystem::WriteProbe(bool Passed, const TCHAR* Reason)
 {
-    const FString Json = FString::Printf(TEXT("{\"passed\":%s,\"reason\":\"%s\",\"ready_matches\":%d,\"generation\":%u,\"visual_verified\":false}"),
-        Passed ? TEXT("true") : TEXT("false"), Reason, ProbeMatches, Flow.MatchGeneration);
+    Passed &= ProbeEvidence.Complete() && Flow.MatchGeneration == 2;
+    if (bNativeFrontend) Passed &= NativeMenuCallbacks == 2 && NativeExperienceCallbacks == 2 &&
+        NativeHostCallbacks == 2 && NativeOfflineHostCallbacks == 2;
+    TSharedRef<FJsonObject> Result = MakeShared<FJsonObject>();
+    Result->SetBoolField(TEXT("passed"), Passed);
+    Result->SetStringField(TEXT("reason"), Reason);
+    Result->SetNumberField(TEXT("ready_matches"), ProbeMatches);
+    Result->SetNumberField(TEXT("generation"), Flow.MatchGeneration);
+    Result->SetNumberField(TEXT("lobby_arrivals"), ProbeEvidence.LobbyArrivals);
+    Result->SetNumberField(TEXT("native_returns"), ProbeEvidence.NativeReturns);
+    Result->SetNumberField(TEXT("cleanups"), ProbeEvidence.Cleanups);
+    Result->SetBoolField(TEXT("cleanup_valid"), ProbeEvidence.CleanupValid);
+    Result->SetBoolField(TEXT("visual_verified"), false);
+    Result->SetBoolField(TEXT("native_frontend"), bNativeFrontend);
+    Result->SetNumberField(TEXT("native_menu_callbacks"), NativeMenuCallbacks);
+    Result->SetNumberField(TEXT("native_experience_callbacks"), NativeExperienceCallbacks);
+    Result->SetNumberField(TEXT("native_host_callbacks"), NativeHostCallbacks);
+    Result->SetNumberField(TEXT("native_offline_host_callbacks"), NativeOfflineHostCallbacks);
+    TArray<TSharedPtr<FJsonValue>> Matches;
+    for (int32 Index = 0; Index < FMath::Min(ProbeMatches, 2); ++Index)
+    {
+        const auto& Match = ProbeEvidence.Matches[Index];
+        TSharedRef<FJsonObject> Item = MakeShared<FJsonObject>();
+        Item->SetNumberField(TEXT("total_bots"), Match.TotalBots);
+        Item->SetNumberField(TEXT("owned_bots"), Match.OwnedBots);
+        Item->SetNumberField(TEXT("ready_bots"), Match.ReadyBots);
+        Item->SetNumberField(TEXT("rival_bots"), Match.RivalBots);
+        Item->SetNumberField(TEXT("match_components"), Match.MatchComponents);
+        Item->SetNumberField(TEXT("human_team"), Match.HumanTeam);
+        Item->SetNumberField(TEXT("rival_team"), Match.RivalTeam);
+        Item->SetBoolField(TEXT("human_ready"), Match.HumanReady);
+        Matches.Add(MakeShared<FJsonValueObject>(Item));
+    }
+    Result->SetArrayField(TEXT("matches"), Matches);
+    FString Json;
+    FJsonSerializer::Serialize(Result, TJsonWriterFactory<>::Create(&Json));
     FFileHelper::SaveStringToFile(Json, *ProbePath);
     FPlatformMisc::RequestExitWithStatus(false, Passed ? 0 : 1);
 }
@@ -223,17 +324,18 @@ UTrainingLobbySubsystem* UTrainingScreen::Session() const
     return GetGameInstance() ? GetGameInstance()->GetSubsystem<UTrainingLobbySubsystem>() : nullptr;
 }
 
-UButton* UTrainingScreen::AddButton(UVerticalBox* Panel, const TCHAR* Label, FName Callback)
+UCommonButtonBase* UTrainingScreen::AddButton(UVerticalBox* Panel, const TCHAR* Label, FName Callback)
 {
-    UButton* Button = WidgetTree->ConstructWidget<UButton>();
-    UTextBlock* Text = WidgetTree->ConstructWidget<UTextBlock>();
-    Text->SetText(FText::FromString(Label));
-    Text->SetColorAndOpacity(FSlateColor(FLinearColor(.025f, .04f, .07f)));
-    Text->SetMargin(FMargin(20.f, 12.f));
-    Button->AddChild(Text);
-    FScriptDelegate Delegate;
+    UClass* ButtonClass = LoadClass<UCommonButtonBase>(nullptr, TEXT("/Game/UI/Menu/W_LyraMenuButton.W_LyraMenuButton_C"));
+    UCommonButtonBase* Button = ButtonClass ? CreateWidget<UCommonButtonBase>(GetOwningPlayer(), ButtonClass) : nullptr;
+    if (!Button || !UTrainingReflectionAdapter::SetNativeButtonLabel(Button, FText::FromString(Label)))
+    {
+        UE_LOG(LogTemp, Error, TEXT("NovanodeTraining native button schema failed"));
+        return nullptr;
+    }
+    FSimpleDelegate Delegate;
     Delegate.BindUFunction(this, Callback);
-    Button->OnClicked.Add(Delegate);
+    Button->OnClicked().Add(Delegate);
     Panel->AddChildToVerticalBox(Button)->SetPadding(FMargin(0.f, 5.f));
     return Button;
 }
@@ -308,7 +410,7 @@ void UTrainingScreen::Refresh()
     if (auto* S = Session())
     {
         if (Status) Status->SetText(FText::FromString(S->GetStatus()));
-        if (StartButton) StartButton->SetIsEnabled(S->GetFlow().State == NovanodeTraining::Screen::Selection &&
+        if (StartButton) StartButton->SetIsEnabled(S->IsChoosingHero() &&
             S->GetFlow().Selected != NovanodeTraining::Hero::None);
     }
 }
@@ -330,6 +432,11 @@ void UTrainingScreen::Mage() { if (Session()) Session()->Choose(true); }
 void UTrainingScreen::Start() { if (Session() && Session()->Host()) DeactivateWidget(); }
 void UTrainingScreen::Back()
 {
+    if (Screen == ETrainingScreen::Selection && Session() && Session()->UsesNativeFrontend())
+    {
+        Session()->ReturnToLobby();
+        return;
+    }
     if (Screen == ETrainingScreen::Selection) { if (Session()) Session()->Back(); DeactivateWidget(); }
     else if (Screen == ETrainingScreen::Pause) Resume();
 }

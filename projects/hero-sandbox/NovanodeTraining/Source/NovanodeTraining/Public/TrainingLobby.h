@@ -9,7 +9,7 @@
 #include "TrainingLobby.generated.h"
 
 class AAIController;
-class UButton;
+class UCommonButtonBase;
 class UTextBlock;
 class UVerticalBox;
 class UInputAction;
@@ -31,8 +31,12 @@ public:
     bool OpenSelection();
     bool Choose(bool Mage);
     bool Host();
+    bool UsesNativeFrontend() const { return bNativeFrontend; }
+    bool IsChoosingHero() const { return bNativeChoosing || Flow.State == NovanodeTraining::Screen::Selection; }
+    void NativeMatchStarted();
     void ReturnToLobby();
-    void MatchReady(bool HumanReady, int32 RivalBots);
+    void MatchReady(const NovanodeTraining::MatchEvidence& Evidence);
+    void MatchEnded(bool Clean);
     void Back();
     void OpenPause();
     void Resume();
@@ -46,16 +50,32 @@ private:
     void Refresh();
     void WriteProbe(bool Passed, const TCHAR* Reason);
     void ProbeWorldInitialized(UWorld* World, const UWorld::InitializationValues Values);
+    void NativeProbeStep();
+    void ReleaseNativeSelectionPause();
     NovanodeTraining::Flow Flow;
     FString Status;
     FString ProbePath;
     int32 ProbeMatches = 0;
+    NovanodeTraining::LoopEvidence ProbeEvidence;
     FDelegateHandle HostHandle;
     FDelegateHandle ProbeWorldHandle;
     TWeakObjectPtr<UTrainingScreen> PauseScreen;
     TWeakObjectPtr<APawn> BlockedPawn;
     bool bMenuBlocking = false;
     bool bAddedInputBlock = false;
+    bool bNativeFrontend = false;
+    bool bNativeChoosing = false;
+    bool bNativeProbeLobbyVisited = false;
+    bool bNativeProbeSelected = false;
+    bool bNativeProbeHosted = false;
+    bool bNativeProbeConfirmed = false;
+    int32 NativeMenuCallbacks = 0;
+    int32 NativeExperienceCallbacks = 0;
+    int32 NativeHostCallbacks = 0;
+    int32 NativeOfflineHostCallbacks = 0;
+    TWeakObjectPtr<UWorld> NativePausedWorld;
+    TWeakObjectPtr<UTrainingScreen> NativeSelection;
+    UPROPERTY(Transient) TObjectPtr<UObject> NativeDefinition;
 };
 
 // Instanced only by the owned match experience's AddComponents action.
@@ -81,6 +101,8 @@ private:
     TSet<TWeakObjectPtr<APawn>> ReadyPawns;
     TWeakObjectPtr<UEnhancedInputComponent> BoundInput;
     uint32 InputHandle = 0;
+    int32 HumanTeam = INDEX_NONE;
+    int32 RivalTeam = INDEX_NONE;
     bool bStarted = false;
 };
 
@@ -104,7 +126,7 @@ protected:
     virtual bool NativeOnHandleBackAction() override;
 private:
     UTrainingLobbySubsystem* Session() const;
-    UButton* AddButton(UVerticalBox* Panel, const TCHAR* Label, FName Callback);
+    UCommonButtonBase* AddButton(UVerticalBox* Panel, const TCHAR* Label, FName Callback);
     void Refresh();
     UFUNCTION() void Training();
     UFUNCTION() void Melee();
@@ -115,7 +137,7 @@ private:
     UFUNCTION() void Resume();
     UFUNCTION() void Return();
     UPROPERTY(Transient) TObjectPtr<UTextBlock> Status;
-    UPROPERTY(Transient) TObjectPtr<UButton> PrimaryButton;
-    UPROPERTY(Transient) TObjectPtr<UButton> StartButton;
+    UPROPERTY(Transient) TObjectPtr<UCommonButtonBase> PrimaryButton;
+    UPROPERTY(Transient) TObjectPtr<UCommonButtonBase> StartButton;
     FDelegateHandle ChangeHandle;
 };
