@@ -3,7 +3,41 @@
 Fuente reproducible: `projects/hero-sandbox/`. Recursos: `resources/hero-sandbox/catalog.json`.
 Trabajamos sobre la copia local de **Lyra 5.8 / Unreal 5.8.4 para Linux**, no sobre NovanodeLab.
 
-## Hero Training v3 — integración local en curso
+## Hero Training nativo — implementación separada, gates pendientes
+
+La ruta vigente vive en `projects/hero-sandbox/NovanodeTraining/`, un **Game Feature separado**.
+Usa un frontend propio con `MainScreenClass`, selección CommonUI, definición
+`ULyraUserFacingExperienceDefinition` y hosting **Offline de CommonSession**. La inicialización
+depende de experiencia/pawn-ready, no de Tick, detección de mapa ni un overlay global.
+
+El adaptador C++ valida los tipos nativos de AddComponents y la firma reflejada de
+`CreateHostingRequest`; no requiere `unreal.GameFeatureComponentEntry`, ausente en esta instalación.
+Los ActionSets compatibles se referencian, sin copiar/aplanar todas las acciones del shooter.
+V1/v2 y los modos/assets originales se conservan. El retorno nativo usa un `GameDefaultMap`
+**solo de la invocación**, apuntando al lobby propio; no cambia la configuración global.
+
+Gates independientes: **compilación exacta → schema/linkage → assets propios → recorrido headless
+de dos partidas → revisión humana visual/feel**. La fuente no acredita ninguno de los gates.
+La selección Melee/Mage aún no acredita sus habilidades/animaciones específicas; la evolución de
+combate va después del recorrido nativo. No se inicia ninguna ventana automáticamente.
+
+```sh
+# Preview únicamente; --execute exige el contrato acotado vigente y sus prerrequisitos.
+python3 projects/hero-sandbox/native_training.py build
+python3 projects/hero-sandbox/native_training.py schema
+python3 projects/hero-sandbox/native_training.py prepare
+python3 projects/hero-sandbox/native_training.py verify
+```
+
+Los manifests fijan archivos exactos por plugin y conservan fuentes/binarios/journals anteriores.
+Un timeout es desconocido, no fallo; no se reintenta ni se retira un hold automáticamente.
+
+## Hero Training v3 — archivo supersedido, no ejecutar
+
+**La arquitectura y los comandos de esta sección son históricos y están cerrados antes de su
+ejecución nativa. No lanzar `hero_training.py` ni reutilizar su contrato/runner.** Se conservan
+como checkpoint, no como ruta ejecutable ni prueba de gameplay. Los probes de schema fallidos
+también se conservan; sus salidas 255 no son éxito de juego.
 
 Objetivo: **Lobby → Hero Training → elegir Melee o Mage → tres bots rivales → volver al lobby**.
 La compatibilidad de clases Lyra/IK y los imports existentes ya pasó en un commandlet de solo lectura
