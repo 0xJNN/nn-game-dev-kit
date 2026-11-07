@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / ".studio/scripts"))
 from pipeline.common import StudioError, atomic_json, load_json, resource_lock, utc_now
 
-TASK = "hero-native-lobby-assettypes-fix-2026-11-07"
+TASK = "hero-native-lobby-probe-deferral-2026-11-07"
 SOURCE = Path(__file__).with_name("NovanodeTraining")
 WORK = ROOT / ".studio/lyra/projects/LyraStarterGame"
 STAGE = WORK / "Plugins/GameFeatures/NovanodeTraining"
@@ -36,6 +36,7 @@ LOBBY = "/NovanodeTraining/Maps/L_TrainingLobby"
 RECIPE = Path(__file__).with_name("prepare_native_training.py")
 GENERATED = {"Binaries", "Intermediate", "Saved", "DerivedDataCache", "__pycache__"}
 MODULE = "Binaries/Linux/libUnrealEditor-NovanodeTraining.so"
+LOADER = "Binaries/Linux/UnrealEditor.modules"
 
 
 def digest(path):
@@ -64,6 +65,10 @@ def load_module(name, path):
     return module
 
 
+def repository_matches_checkpoint(revision, index, checkpoint):
+    return revision == checkpoint["revision"] and index == checkpoint["index_sha256"]
+
+
 def prior_guard():
     pinned = load_json(PRESERVED)
     for name, expected in pinned["identity"]["files_sha256"].items():
@@ -77,8 +82,11 @@ def prior_guard():
             raise StudioError("Prior native job changed: " + name)
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT).decode().strip()
     index = hashlib.sha256(subprocess.check_output(["git", "ls-files", "--stage"], cwd=ROOT)).hexdigest()
-    staged_checkpoint = load_json(EVIDENCE / "hero-native-lobby-index-final-2026-11-07.json")
-    if revision != pinned["identity"]["revision"] or index != staged_checkpoint["index_sha256"]:
+    repository_checkpoint = load_json(EVIDENCE / "hero-native-lobby-staging-checkpoint-2026-11-07.json")
+    for name, expected in repository_checkpoint["prior_native_journals_sha256"].items():
+        if digest(ROOT / name) != expected:
+            raise StudioError("Checkpointed failed/native journal changed: " + name)
+    if not repository_matches_checkpoint(revision, index, repository_checkpoint):
         raise StudioError("Revision/index changed; preserve parallel work and checkpoint")
 
 
@@ -157,13 +165,14 @@ def compile_correction_updates(previous, authored):
 
 
 def sync_compile_correction(receipt):
-    checkpoint = load_json(EVIDENCE / "hero-native-lobby-assettypes-checkpoint-2026-11-07.json")
+    checkpoint = load_json(EVIDENCE / "hero-native-lobby-probe-checkpoint-2026-11-07.json")
     previous = checkpoint["installed_source_sha256"]
     authored = manifest(SOURCE)
-    if receipt["sha256"] != previous or manifest(STAGE) != previous:
+    expected_installed = {**previous, **{"Content/" + k: v for k, v in checkpoint["content_sha256"].items()}}
+    if receipt["sha256"] != previous or manifest(STAGE) != expected_installed:
         raise StudioError("Stopped installed source changed; preserve it before correction")
-    changed = asset_types_correction_updates(previous, authored)
-    if digest(EVIDENCE / ("hero-native-lobby-job-" + checkpoint["original_job"] + ".json")) != checkpoint["journal_sha256"]:
+    changed = probe_deferral_source_updates(previous, authored)
+    if digest(EVIDENCE / ("hero-native-lobby-job-" + checkpoint["verify_job"] + ".json")) != checkpoint["verify_journal_sha256"]:
         raise StudioError("Original failed native journal changed; preserve and review")
     archive = ROOT / checkpoint["source_archive"] / "install-before-correction.json"
     if archive.exists():
@@ -187,6 +196,87 @@ def asset_types_correction_updates(previous, authored):
     if set(previous) != set(authored) or changed != allowed:
         raise StudioError("Correction is not exactly the measured AssetManagerTypes fix")
     return changed
+
+
+def bootstrap_correction_updates(previous, authored):
+    allowed = {"Source/NovanodeTraining/NovanodeTraining.Build.cs", "Source/NovanodeTraining/Private/TrainingAssets.cpp"}
+    changed = {name for name in previous.keys() | authored.keys() if previous.get(name) != authored.get(name)}
+    if set(previous) != set(authored) or changed != allowed:
+        raise StudioError("Correction is not exactly the measured bootstrap mount/dependency fix")
+    return changed
+
+
+def gc_correction_updates(previous, authored):
+    allowed = {"Source/NovanodeTraining/Private/TrainingAssets.cpp", "Source/NovanodeTraining/Private/TrainingReflectionAdapter.cpp"}
+    changed = {name for name in previous.keys() | authored.keys() if previous.get(name) != authored.get(name)}
+    if set(previous) != set(authored) or changed != allowed:
+        raise StudioError("Correction is not exactly the measured scoped-GC lifetime fix")
+    return changed
+
+
+def mapid_source_updates(previous, authored):
+    allowed = {"Source/NovanodeTraining/Private/TrainingAssets.cpp", "Source/NovanodeTraining/Public/TrainingReflectionAdapter.h"}
+    changed = {name for name in previous.keys() | authored.keys() if previous.get(name) != authored.get(name)}
+    if set(previous) != set(authored) or changed != allowed:
+        raise StudioError("Correction is not exactly the observed native MapID recipe/migration fix")
+    return changed
+
+
+def initstate_source_updates(previous, authored):
+    allowed = {"Source/NovanodeTraining/Private/TrainingMatchComponent.cpp"}
+    changed = {name for name in previous.keys() | authored.keys() if previous.get(name) != authored.get(name)}
+    if set(previous) != set(authored) or changed != allowed:
+        raise StudioError("Correction is not exactly the observed Hero init-state binding fix")
+    return changed
+
+
+def probe_deferral_source_updates(previous, authored):
+    allowed = {"Source/NovanodeTraining/Private/TrainingLobby.cpp"}
+    changed = {name for name in previous.keys() | authored.keys() if previous.get(name) != authored.get(name)}
+    if set(previous) != set(authored) or changed != allowed:
+        raise StudioError("Correction is not exactly the measured opt-in probe deferral")
+    return changed
+
+
+def validate_mapid_migration(before, after):
+    changed = {name for name in before.keys() | after.keys() if before.get(name) != after.get(name)}
+    if not before or set(before) != set(after) or changed != {"Experiences/DA_HeroTraining.uasset"}:
+        raise StudioError("MapID migration changed other assets or did not change exactly the definition")
+
+
+def loader_inventory(engine_manifest, target_manifest, binary, successful_exit):
+    engine_id = engine_manifest.get("BuildId")
+    if type(successful_exit) is not int or successful_exit != 0 or not engine_id or engine_id != target_manifest.get("BuildId"):
+        raise StudioError("A source-exact successful build and matching engine/target BuildIds are required")
+    if binary.is_symlink() or not binary.is_file():
+        raise StudioError("Actual owned compiled ELF is required")
+    with binary.open("rb") as stream:
+        if stream.read(4) != b"\x7fELF":
+            raise StudioError("Actual owned compiled ELF is required")
+    return {"BuildId": engine_id, "Modules": {"NovanodeTraining": "libUnrealEditor-NovanodeTraining.so"}}
+
+
+def publish_loader_inventory(row):
+    data = loader_inventory(load_json(ENGINE / "Engine/Binaries/Linux/UnrealEditor.modules"),
+                            load_json(WORK / "Binaries/Linux/UnrealEditor.modules"), STAGE / MODULE, row["exit_code"])
+    destination = STAGE / LOADER
+    if destination.exists():
+        if load_json(destination) != data or not proven_loader_reuse(journals(), digest(destination), row.get("module_before")):
+            raise StudioError("Own loader inventory already exists without matching provenance; preserve rather than overwrite")
+        row["loader_manifest_reused_without_write"] = True
+    else:
+        with destination.open("x") as output:
+            output.write(json.dumps(data, indent=2) + "\n")
+    row["loader_manifest_sha256"] = digest(destination)
+    row["loader_manifest_origin"] = "owned_additive_loader_inventory_after_observed_UBT_success_not_a_build_receipt"
+    row["loader_build_id"] = data["BuildId"]
+
+
+def proven_loader_reuse(previous_builds, loader_hash, previous_module):
+    return any(r.get("operation") == "build" and r.get("state") == "completed" and
+               type(r.get("exit_code")) is int and r["exit_code"] == 0 and previous_module is not None and
+               r.get("module_sha256") == previous_module and r.get("loader_manifest_sha256") == loader_hash
+               for r in previous_builds)
 
 
 def install():
@@ -232,17 +322,34 @@ def ensure_no_pending():
 
 
 def require_phase(operation, source, content):
-    phases = {"schema": "build", "prepare": "schema", "verify": "prepare"}
+    phases = {"schema": "build", "prepare": "schema", "repair-map-id": "schema", "validate-assets": "schema", "verify": "prepare"}
     previous = phases.get(operation)
     if not previous:
         return
-    candidates = [r for r in journals() if r.get("operation") == previous and r.get("state") == "completed" and
+    previous_operations = {previous, "repair-map-id", "validate-assets"} if operation == "verify" else {previous}
+    candidates = [r for r in journals() if r.get("operation") in previous_operations and r.get("state") == "completed" and
                   type(r.get("exit_code")) is int and r["exit_code"] == 0 and r.get("source_sha256") == source and
                   r.get("module_sha256") == digest(STAGE / MODULE)]
     if len(candidates) != 1:
         raise StudioError("No unique source-exact successful prerequisite: " + previous)
+    if candidates[0].get("loader_manifest_sha256") != digest(STAGE / LOADER):
+        raise StudioError("Exact owned native loader inventory differs")
     if operation == "verify" and content != candidates[0].get("content_after"):
         raise StudioError("Owned assets differ from the exact prepared manifest")
+    if operation == "repair-map-id":
+        checkpoint = load_json(EVIDENCE / "hero-native-lobby-mapid-checkpoint-2026-11-07.json")
+        if content != checkpoint["content_sha256"]:
+            raise StudioError("Asset parent differs from the exact successful preparation")
+        parent = EVIDENCE / ("hero-native-lobby-job-" + checkpoint["asset_parent_job_id"] + ".json")
+        if digest(parent) != checkpoint["asset_parent_journal_sha256"]:
+            raise StudioError("Successful asset parent journal changed; preserve and review")
+    if operation == "validate-assets":
+        checkpoint = load_json(EVIDENCE / "hero-native-lobby-probe-checkpoint-2026-11-07.json")
+        if content != checkpoint["content_sha256"]:
+            raise StudioError("Previously repaired asset manifest differs; no reprepare allowed")
+        parent = EVIDENCE / ("hero-native-lobby-job-" + checkpoint["asset_parent_job_id"] + ".json")
+        if digest(parent) != checkpoint["asset_parent_journal_sha256"]:
+            raise StudioError("Repaired asset parent journal changed; preserve and review")
 
 
 def summarize(path):
@@ -277,6 +384,8 @@ def command(operation, folder):
         result.insert(2, LOBBY)
         result += ["-game", "-DisablePython", "-NovanodeTrainingProbe=" + str(folder / "result.json")]
     else:
+        if operation in ("schema", "prepare", "repair-map-id"):
+            result += ["-DPCVars=GameFeaturePlugin.SkipBuiltInGameFeatures=1"]
         result += ["-run=pythonscript", "-script=" + str(RECIPE)]
     return result
 
@@ -313,6 +422,8 @@ def run(operation):
                "source_sha256": source, "recipe_sha256": digest(RECIPE), "runner_sha256": digest(Path(__file__)),
                "command": argv, "content_before": content, "preservation_before": preservation,
                "module_before": digest(STAGE / MODULE) if (STAGE / MODULE).is_file() else None,
+               "asset_parent_job_id": ("prepare-09db4c3c7434" if operation == "repair-map-id" else
+                                       "repair-map-id-860afbec0776" if operation == "validate-assets" else None),
                "frozen_inputs": {str(p.relative_to(ROOT)): digest(p) for p in (
                    Path(__file__), RECIPE, ROOT / "tests/test_native_training.py",
                    ROOT / f".studio/tasks/{TASK}.json")},
@@ -342,6 +453,10 @@ def run(operation):
             row["preservation_after"] = verify_baseline()
             row["content_after"] = manifest(STAGE / "Content", generated=True)
             row["module_sha256"] = digest(STAGE / MODULE) if (STAGE / MODULE).is_file() else None
+            if operation == "build" and code == 0 and row["module_sha256"]:
+                publish_loader_inventory(row)
+            elif (STAGE / LOADER).is_file():
+                row["loader_manifest_sha256"] = digest(STAGE / LOADER)
             result = folder / "result.json"
             row["result"] = load_json(result) if result.exists() else {}
             good = type(code) is int and code == 0 and bool(row["module_sha256"])
@@ -349,10 +464,13 @@ def run(operation):
                 good = good and not row["summary"]["build_failed_marker"]
             else:
                 good = good and row["summary"]["fatal_count"] == row["summary"]["error_count"] == 0 and row["summary"]["normal_shutdown"]
-                expected = {"schema": "schema_verified", "prepare": "prepared"}.get(operation)
+                expected = {"schema": "schema_verified", "prepare": "prepared", "repair-map-id": "assets_repaired", "validate-assets": "assets_loaded"}.get(operation)
                 good = good and (row["result"].get("state") == expected if expected else
-                                 row["result"].get("passed") is True and row["result"].get("ready_matches") == 2)
-            if operation != "prepare" and row["content_after"] != content:
+                                 row["result"].get("passed") is True and row["result"].get("ready_matches") == 2 and
+                                 row["result"].get("generation") == 2)
+            if operation == "repair-map-id":
+                validate_mapid_migration(content, row["content_after"])
+            elif operation != "prepare" and row["content_after"] != content:
                 good = False
             row["state"] = "completed" if good else "blocked"
         except (Exception, KeyboardInterrupt):
@@ -366,7 +484,7 @@ def run(operation):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("build", "schema", "prepare", "verify", "audit"))
+    parser.add_argument("operation", choices=("build", "schema", "prepare", "repair-map-id", "validate-assets", "verify", "audit"))
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
     if args.operation == "audit":

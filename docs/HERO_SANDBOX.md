@@ -5,6 +5,20 @@ Trabajamos sobre la copia local de **Lyra 5.8 / Unreal 5.8.4 para Linux**, no so
 
 ## Hero Training nativo — implementación separada, gates pendientes
 
+**Checkpoint 2026-11-07: integración bloqueada, no presentar como lobby jugable verificado.**
+La compilación nativa exacta, el adaptador reflejado, su regresión de GC forzado y la creación de
+13 assets propios pasaron. El ID real del mapa usa el nombre completo del paquete; se migró
+únicamente `MapID` en la definición propia, conservando todos los demás hashes. La validación
+nativa posterior de los assets contra el binario actual también pasó sin errores.
+
+El probe Offline sí cargó el lobby y el mapa propios, pero los últimos intentos terminaron con
+**SIGSEGV en la inicialización de bots**. No hay dos partidas verificadas ni prueba de combate,
+respawn, botones/input reales o limpieza completa de regreso. La deferral de acciones automáticas
+del probe no resolvió ese fallo. Los intentos y sus salidas observadas se conservan; no repetir
+contratos agotados ni borrar/recrear los assets. Evidencia/handoff local:
+`.studio/builds/hero-native-lobby/handoff.md`. No se abrió ninguna ventana ni se otorgó aprobación
+visual/feel. Se requiere una nueva tarea acotada para diagnosticar la inicialización nativa de bots.
+
 La ruta vigente vive en `projects/hero-sandbox/NovanodeTraining/`, un **Game Feature separado**.
 Usa un frontend propio con `MainScreenClass`, selección CommonUI, definición
 `ULyraUserFacingExperienceDefinition` y hosting **Offline de CommonSession**. La inicialización

@@ -1,6 +1,7 @@
 #include "TrainingLobby.h"
 
 #include "AIController.h"
+#include "Character/LyraHeroComponent.h"
 #include "Components/GameFrameworkComponentManager.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
@@ -37,7 +38,7 @@ void UTrainingMatchComponent::ExperienceLoaded(const ULyraExperienceDefinition*)
     ALyraGameMode* Mode = GetWorld()->GetAuthGameMode<ALyraGameMode>();
     if (!Mode) return;
     auto* Components = GetWorld()->GetGameInstance()->GetSubsystem<UGameFrameworkComponentManager>();
-    PawnReadyHandle = Components->RegisterAndCallForClassInitState(APawn::StaticClass(), NAME_None,
+    PawnReadyHandle = Components->RegisterAndCallForClassInitState(APawn::StaticClass(), ULyraHeroComponent::NAME_ActorFeatureName,
         FGameplayTag::RequestGameplayTag(TEXT("InitState.GameplayReady")),
         FActorInitStateChangedDelegate::CreateUObject(this, &ThisClass::PawnReady), true);
     for (int32 Index = 0; Index < 3; ++Index)

@@ -10,7 +10,7 @@ public class NovanodeTraining : ModuleRules
             "CommonUI", "CommonGame", "CommonUser", "GameplayTags", "GameplayAbilities",
             "UMG", "EnhancedInput", "InputCore", "AIModule"
         });
-        PrivateDependencyModuleNames.AddRange(new[] { "Slate", "SlateCore", "Json", "AssetRegistry" });
+        PrivateDependencyModuleNames.AddRange(new[] { "Slate", "SlateCore", "Json", "AssetRegistry", "Projects" });
         if (Target.bBuildEditor)
         {
             PrivateDependencyModuleNames.AddRange(new[] { "UnrealEd", "AssetTools", "KismetCompiler" });

@@ -139,8 +139,15 @@ void UTrainingLobbySubsystem::MatchReady(bool HumanReady, int32 RivalBots)
     if (!ProbePath.IsEmpty())
     {
         ++ProbeMatches;
-        if (ProbeMatches == 1) ReturnToLobby();
-        else WriteProbe(true, TEXT("two_matches_ready"));
+        const FString Progress = FString::Printf(TEXT("{\"passed\":false,\"reason\":\"match_ready_pending_next_frame\",\"ready_matches\":%d,\"generation\":%u,\"visual_verified\":false}"),
+            ProbeMatches, Flow.MatchGeneration);
+        FFileHelper::SaveStringToFile(Progress, *ProbePath);
+        // Pawn-ready may run inside experience/bot construction. Never tear down that world on its stack.
+        GetWorld()->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
+        {
+            if (ProbeMatches == 1) ReturnToLobby();
+            else WriteProbe(true, TEXT("two_matches_ready"));
+        }));
     }
 }
 

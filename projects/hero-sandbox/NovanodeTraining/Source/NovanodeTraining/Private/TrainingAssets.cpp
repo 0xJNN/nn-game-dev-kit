@@ -17,8 +17,11 @@
 #include "InputAction.h"
 #include "InputCoreTypes.h"
 #include "InputMappingContext.h"
+#include "Interfaces/IPluginManager.h"
 #include "Kismet2/KismetEditorUtilities.h"
+#include "Misc/PackageName.h"
 #include "UObject/UnrealType.h"
+#include "UObject/StrongObjectPtr.h"
 
 namespace
 {
@@ -88,33 +91,33 @@ bool SetSoftClass(UObject* Object, FName Name, UClass* Value)
     return true;
 }
 
-UBlueprint* Blueprint(const FString& Folder, const FString& Name, UClass* Parent, TArray<UObject*>& Created)
+UBlueprint* Blueprint(const FString& Folder, const FString& Name, UClass* Parent, TArray<TStrongObjectPtr<UObject>>& Created)
 {
     if (!Parent) return nullptr;
     UBlueprintFactory* Factory = NewObject<UBlueprintFactory>();
     Factory->ParentClass = Parent;
     auto* Result = Cast<UBlueprint>(FModuleManager::LoadModuleChecked<FAssetToolsModule>(TEXT("AssetTools")).Get().CreateAsset(
         Name, FString(OwnedRoot) + Folder, UBlueprint::StaticClass(), Factory));
-    if (Result) Created.Add(Result);
+    if (Result) Created.Emplace(Result);
     return Result;
 }
 
-template<class T> T* Data(const FString& Folder, const FString& Name, TArray<UObject*>& Created)
+template<class T> T* Data(const FString& Folder, const FString& Name, TArray<TStrongObjectPtr<UObject>>& Created)
 {
     UPackage* Package = CreatePackage(*(FString(OwnedRoot) + (Folder.IsEmpty() ? TEXT("") : Folder + TEXT("/")) + Name));
     T* Result = NewObject<T>(Package, *Name, RF_Public | RF_Standalone);
     FAssetRegistryModule::AssetCreated(Result);
-    Created.Add(Result);
+    Created.Emplace(Result);
     return Result;
 }
 
-UObject* Duplicate(const TCHAR* Source, const FString& Folder, const FString& Name, TArray<UObject*>& Created)
+UObject* Duplicate(const TCHAR* Source, const FString& Folder, const FString& Name, TArray<TStrongObjectPtr<UObject>>& Created)
 {
     UObject* Original = LoadObject<UObject>(nullptr, Source);
     if (!Original) return nullptr;
     UObject* Result = FModuleManager::LoadModuleChecked<FAssetToolsModule>(TEXT("AssetTools")).Get().DuplicateAsset(
         Name, FString(OwnedRoot) + Folder, Original);
-    if (Result) Created.Add(Result);
+    if (Result) Created.Emplace(Result);
     return Result;
 }
 
@@ -133,8 +136,16 @@ FString UTrainingReflectionAdapter::PrepareOwnedAssets()
 {
 #if WITH_EDITOR
     if (!HasComponentEntrySchema()) return TEXT("{\"state\":\"blocked\",\"reason\":\"component_schema\"}");
+    // Only editor preparation uses these explicit mounts; no gameplay feature is activated here.
+    if (!FPackageName::MountPointExists(TEXT("/LyraExampleContent/")))
+        return TEXT("{\"state\":\"blocked\",\"reason\":\"required_regular_plugin_mount\"}");
+    for (const TCHAR* Name : { TEXT("ShooterCore"), TEXT("NovanodeTraining") })
+        if (!FPackageName::MountPointExists(FString::Printf(TEXT("/%s/"), Name)) &&
+            !IPluginManager::Get().MountExplicitlyLoadedPlugin(Name))
+            return TEXT("{\"state\":\"blocked\",\"reason\":\"preparation_content_mount\"}");
     // A preparation is single-use. The launcher additionally refuses ANY pre-existing owned Content.
     UClass* SourceClass = LoadClass<UObject>(nullptr, ShooterPath);
+    TStrongObjectPtr<UClass> SourcePin(SourceClass);
     UObject* Shooter = SourceClass ? SourceClass->GetDefaultObject() : nullptr;
     UObject* PawnData = ObjectField(Shooter, TEXT("DefaultPawnData"));
     UClass* BotBase = LoadClass<UActorComponent>(nullptr, TEXT("/Script/LyraGame.LyraBotCreationComponent"));
@@ -142,10 +153,10 @@ FString UTrainingReflectionAdapter::PrepareOwnedAssets()
     UClass* FrontBase = LoadClass<UActorComponent>(nullptr, TEXT("/Script/LyraGame.LyraFrontendStateComponent"));
     if (!Shooter || !PawnData || !BotBase || !TeamBase || !FrontBase) return TEXT("{\"state\":\"blocked\",\"reason\":\"reference_classes\"}");
 
-    TArray<UObject*> Created;
+    TArray<TStrongObjectPtr<UObject>> Created;
     UClass* BotController = nullptr;
     TArray<UObject*> SafeActions;
-    auto* Teams = NewObject<UGameFeatureAction_AddComponents>();
+    TStrongObjectPtr<UGameFeatureAction_AddComponents> Teams(NewObject<UGameFeatureAction_AddComponents>());
     for (UObject* Action : ObjectArray(Shooter, TEXT("Actions")))
         for (auto* Entry : ComponentEntries(Action))
         {
@@ -153,7 +164,7 @@ FString UTrainingReflectionAdapter::PrepareOwnedAssets()
             if (Component && Component->IsChildOf(BotBase))
                 BotController = Cast<UClass>(ObjectField(Component->GetDefaultObject(), TEXT("BotControllerClass")));
             if (Component && Component->IsChildOf(TeamBase))
-                AddComponent(Teams, Entry->ActorClass.LoadSynchronous(), Component, Entry->bClientComponent, Entry->bServerComponent);
+                AddComponent(Teams.Get(), Entry->ActorClass.LoadSynchronous(), Component, Entry->bClientComponent, Entry->bServerComponent);
         }
     // Selected compatible ActionSets remain REFERENCES, never flattened/copied.
     TArray<UObject*> Sets;
@@ -170,6 +181,7 @@ FString UTrainingReflectionAdapter::PrepareOwnedAssets()
             Sets.Add(Set);
         }
     if (!BotController || Sets.Num() != AllowedSets.Num()) return TEXT("{\"state\":\"blocked\",\"reason\":\"compatible_references\"}");
+    TStrongObjectPtr<UClass> ControllerPin(BotController);
 
     UBlueprint* LobbyUI = Blueprint(TEXT("UI"), TEXT("W_TrainingLobby"), UTrainingScreen::StaticClass(), Created);
     UBlueprint* SelectionUI = Blueprint(TEXT("UI"), TEXT("W_HeroSelection"), UTrainingScreen::StaticClass(), Created);
@@ -213,7 +225,7 @@ FString UTrainingReflectionAdapter::PrepareOwnedAssets()
     auto* Components = NewObject<UGameFeatureAction_AddComponents>(Experience);
     if (!AddComponent(Components, AGameStateBase::StaticClass(), MatchComponent->GeneratedClass))
         return TEXT("{\"state\":\"blocked\",\"reason\":\"match_component\"}");
-    if (!ComponentEntries(Teams).IsEmpty()) SafeActions.Add(DuplicateObject(Teams, Experience));
+    if (!ComponentEntries(Teams.Get()).IsEmpty()) SafeActions.Add(DuplicateObject(Teams.Get(), Experience));
     SafeActions.Add(Components);
     if (!SetObject(Experience, TEXT("DefaultPawnData"), PawnData) || !SetObjects(Experience, TEXT("Actions"), SafeActions) ||
         !SetObjects(Experience, TEXT("ActionSets"), Sets) || !EnableFeature(Experience))
@@ -229,12 +241,12 @@ FString UTrainingReflectionAdapter::PrepareOwnedAssets()
     UPackage* DefinitionPackage = CreatePackage(TEXT("/NovanodeTraining/Experiences/DA_HeroTraining"));
     UObject* Definition = NewObject<UObject>(DefinitionPackage, DefinitionType, TEXT("DA_HeroTraining"), RF_Public | RF_Standalone);
     FAssetRegistryModule::AssetCreated(Definition);
-    Created.Add(Definition);
+    Created.Emplace(Definition);
     auto* MapID = FindFProperty<FStructProperty>(DefinitionType, TEXT("MapID"));
     auto* ExperienceID = FindFProperty<FStructProperty>(DefinitionType, TEXT("ExperienceID"));
     if (!MapID || !ExperienceID || MapID->Struct != FPrimaryAssetId::StaticStruct() || ExperienceID->Struct != FPrimaryAssetId::StaticStruct())
         return TEXT("{\"state\":\"blocked\",\"reason\":\"definition_schema\"}");
-    *MapID->ContainerPtrToValuePtr<FPrimaryAssetId>(Definition) = FPrimaryAssetId(TEXT("Map"), TEXT("L_HeroTraining"));
+    *MapID->ContainerPtrToValuePtr<FPrimaryAssetId>(Definition) = TrainingMap->GetPrimaryAssetId();
     *ExperienceID->ContainerPtrToValuePtr<FPrimaryAssetId>(Definition) = FPrimaryAssetId(TEXT("LyraExperienceDefinition"), TEXT("B_HeroTraining"));
 
     auto* Feature = Data<UGameFeatureData>(TEXT(""), TEXT("NovanodeTraining"), Created);
@@ -256,8 +268,9 @@ FString UTrainingReflectionAdapter::PrepareOwnedAssets()
     AddType(TEXT("LyraUserFacingExperienceDefinition"), DefinitionType, TEXT("/NovanodeTraining/Experiences"), false);
     AddType(TEXT("Map"), UWorld::StaticClass(), TEXT("/NovanodeTraining/Maps"), false);
     TArray<UPackage*> Packages;
-    for (UObject* Asset : Created)
+    for (const TStrongObjectPtr<UObject>& Pin : Created)
     {
+        UObject* Asset = Pin.Get();
         if (!Owned(Asset)) return TEXT("{\"state\":\"blocked\",\"reason\":\"write_boundary\"}");
         Asset->MarkPackageDirty();
         Packages.AddUnique(Asset->GetOutermost());
@@ -280,6 +293,35 @@ FString UTrainingReflectionAdapter::VerifyOwnedAssets()
     if (!Front || !Match || !Feature || !HasHostingSignature(Definition))
         return TEXT("{\"state\":\"blocked\",\"reason\":\"required_assets\"}");
     return TEXT("{\"state\":\"assets_loaded\",\"gameplay_verified\":false,\"visual_verified\":false}");
+#else
+    return TEXT("{\"state\":\"blocked\",\"reason\":\"editor_required\"}");
+#endif
+}
+
+FString UTrainingReflectionAdapter::RepairOwnedMapId()
+{
+#if WITH_EDITOR
+    for (const TCHAR* Name : { TEXT("ShooterCore"), TEXT("NovanodeTraining") })
+        if (!FPackageName::MountPointExists(FString::Printf(TEXT("/%s/"), Name)) &&
+            !IPluginManager::Get().MountExplicitlyLoadedPlugin(Name))
+            return TEXT("{\"state\":\"blocked\",\"reason\":\"migration_mount\"}");
+    TStrongObjectPtr<UWorld> Map(LoadObject<UWorld>(nullptr, TEXT("/NovanodeTraining/Maps/L_HeroTraining.L_HeroTraining")));
+    TStrongObjectPtr<UObject> Definition(LoadObject<UObject>(nullptr, TEXT("/NovanodeTraining/Experiences/DA_HeroTraining.DA_HeroTraining")));
+    if (!Map.IsValid() || !Owned(Definition.Get()) || !HasHostingSignature(Definition.Get()))
+        return TEXT("{\"state\":\"blocked\",\"reason\":\"migration_owned_types\"}");
+    auto* Field = FindFProperty<FStructProperty>(Definition->GetClass(), TEXT("MapID"));
+    if (!Field || Field->Struct != FPrimaryAssetId::StaticStruct())
+        return TEXT("{\"state\":\"blocked\",\"reason\":\"migration_schema\"}");
+    auto* Value = Field->ContainerPtrToValuePtr<FPrimaryAssetId>(Definition.Get());
+    const FPrimaryAssetId Actual = Map->GetPrimaryAssetId();
+    if (Value->ToString() != TEXT("Map:L_HeroTraining") || Actual.ToString() != TEXT("Map:/NovanodeTraining/Maps/L_HeroTraining"))
+        return TEXT("{\"state\":\"blocked\",\"reason\":\"migration_exact_old_and_native_id\"}");
+    *Value = Actual;
+    Definition->MarkPackageDirty();
+    TArray<UPackage*> Packages = { Definition->GetOutermost() };
+    if (!UEditorLoadingAndSavingUtils::SavePackages(Packages, false))
+        return TEXT("{\"state\":\"blocked\",\"reason\":\"migration_save\"}");
+    return TEXT("{\"state\":\"assets_repaired\",\"only_field\":\"MapID\",\"native_map_id\":\"Map:/NovanodeTraining/Maps/L_HeroTraining\",\"gameplay_verified\":false}");
 #else
     return TEXT("{\"state\":\"blocked\",\"reason\":\"editor_required\"}");
 #endif

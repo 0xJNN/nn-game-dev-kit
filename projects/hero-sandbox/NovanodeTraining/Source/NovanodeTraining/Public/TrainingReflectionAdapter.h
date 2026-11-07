@@ -22,6 +22,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="Novanode|Training")
     static FString VerifyOwnedAssets();
 
+    UFUNCTION(BlueprintCallable, Category="Novanode|Training")
+    static FString RepairOwnedMapId();
+
     static bool HasComponentEntrySchema();
     static bool HasHostingSignature(UObject* Definition);
     static UCommonSession_HostSessionRequest* CreateOfflineRequest(UObject* Definition, UObject* Context);

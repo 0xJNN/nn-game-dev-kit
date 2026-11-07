@@ -7,6 +7,8 @@
 #include "GameFeatureAction_AddComponents.h"
 #include "Serialization/JsonSerializer.h"
 #include "UObject/StructOnScope.h"
+#include "UObject/StrongObjectPtr.h"
+#include "UObject/UObjectGlobals.h"
 #include "UObject/UnrealType.h"
 
 namespace
@@ -103,11 +105,15 @@ FString UTrainingReflectionAdapter::InspectInstalledSchema()
     UClass* Frontend = LoadClass<UActorComponent>(nullptr, TEXT("/Script/LyraGame.LyraFrontendStateComponent"));
     auto* MainScreen = Frontend ? FindFProperty<FSoftClassProperty>(Frontend, TEXT("MainScreenClass")) : nullptr;
     const bool Editable = MainScreen && MainScreen->HasAnyPropertyFlags(CPF_Edit);
+    TStrongObjectPtr<UGameFeatureAction_AddComponents> ScopedAction(NewObject<UGameFeatureAction_AddComponents>());
+    CollectGarbage(RF_NoFlags);
+    const bool ScopedLifetime = IsValid(ScopedAction.Get()) && ScopedAction->GetClass() == UGameFeatureAction_AddComponents::StaticClass();
     TSharedRef<FJsonObject> Result = MakeShared<FJsonObject>();
     Result->SetBoolField(TEXT("component_entry_schema"), Components);
     Result->SetBoolField(TEXT("hosting_signature"), Hosting);
     Result->SetBoolField(TEXT("editable_frontend_main_screen"), Editable);
-    Result->SetStringField(TEXT("state"), Components && Hosting && Editable ? TEXT("schema_verified") : TEXT("blocked"));
+    Result->SetBoolField(TEXT("scoped_uobject_survives_forced_gc"), ScopedLifetime);
+    Result->SetStringField(TEXT("state"), Components && Hosting && Editable && ScopedLifetime ? TEXT("schema_verified") : TEXT("blocked"));
     Result->SetBoolField(TEXT("gameplay_verified"), false);
     FString Json;
     FJsonSerializer::Serialize(Result, TJsonWriterFactory<>::Create(&Json));
